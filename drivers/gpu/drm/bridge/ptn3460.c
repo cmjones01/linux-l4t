@@ -225,6 +225,12 @@ out:
 	return num_modes;
 }
 
+static int ptn3460_mode_valid(struct drm_connector *connector,
+		struct drm_display_mode *mode)
+{
+	return MODE_OK;
+}
+
 struct drm_encoder *ptn3460_best_encoder(struct drm_connector *connector)
 {
 	struct ptn3460_bridge *ptn_bridge;
@@ -236,6 +242,7 @@ struct drm_encoder *ptn3460_best_encoder(struct drm_connector *connector)
 
 struct drm_connector_helper_funcs ptn3460_connector_helper_funcs = {
 	.get_modes = ptn3460_get_modes,
+	.mode_valid = ptn3460_mode_valid,
 	.best_encoder = ptn3460_best_encoder,
 };
 
@@ -328,7 +335,7 @@ int ptn3460_init(struct drm_device *dev, struct drm_encoder *encoder,
 	}
 	drm_connector_helper_add(&ptn_bridge->connector,
 			&ptn3460_connector_helper_funcs);
-	drm_connector_register(&ptn_bridge->connector);
+	drm_sysfs_connector_add(&ptn_bridge->connector);
 	drm_mode_connector_attach_encoder(&ptn_bridge->connector, encoder);
 
 	return 0;
