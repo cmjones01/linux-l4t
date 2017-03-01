@@ -200,16 +200,18 @@
 	sound {
 		compatible = "ad,tegra-audio-wm8903-medcom-wide",
 			     "nvidia,tegra-audio-wm8903";
-		nvidia,model = "Avionic Design Meerkat WM8903";
+		nvidia,model = "Opticorder WM8903";
 
 		nvidia,audio-routing =
-			"Headphone Jack", "HPOUTR",
-			"Headphone Jack", "HPOUTL",
+			"Headphone Jack", "LINEOUTR",
+			"Headphone Jack", "LINEOUTL",
+			"Int Spk", "ROP",
+ 			"Int Spk", "RON",
+ 			"Int Spk", "LOP",
+ 			"Int Spk", "LON",
 			"Mic Jack", "MICBIAS",
 			"IN1R", "Mic Jack",
 			"IN1L", "Mic Jack";
-
-		nvidia,hp-det-gpios = <&gpio TEGRA_GPIO(P, 0) GPIO_ACTIVE_HIGH>;
 
 		nvidia,memory-clients = <SWGID_PPCS>;
 		nvidia,i2s-controller = <&tegra_i2s1>;
