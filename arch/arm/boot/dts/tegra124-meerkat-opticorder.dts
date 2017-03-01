@@ -1,6 +1,7 @@
 /dts-v1/;
 
 #include "tegra124-meerkat.dtsi"
+#include "panel-ch070oldl-002.dtsi"
 
 / {
 	model = "Avionic Design Meerkat Evalboard";
@@ -47,6 +48,22 @@
 
 		hdmi {
 			status = "okay";
+		};
+			dc@54240000 {
+			status = "okay";
+
+			nvidia,dc-connection = "internal-lcd";
+			panel = <&edp_panel>;
+		};
+
+		sor@54540000 {
+			status = "okay";
+		};
+
+		edp {
+			status = "okay";
+			edp_panel: panel-ch070oldl-002 {
+			};
 		};
 	};
 
@@ -154,13 +171,22 @@
 	i2c@7000c400 {
 		status = "okay";
 
-		eeprom@51 {
-			compatible = "microchip,24c02";
-			reg = <0x51>;
-			pagesize = <16>;
+		lvds-bridge@20 {
+			compatible = "nxp,ptn3460";
+			reg = <0x20>;
+			powerdown-gpio = <TEGRA_GPIO(U, 1)>;
+			reset-gpio = <TEGRA_GPIO(H, 1)>;
+			edid-emulation = <5>;
+			ports {
+				port@0 {
+					bridge_out: endpoint {
+						remote-endpoint = <&panel-ch070oldl-002>;
+					};
+				};
+			};
 		};
 	};
-
+	
 	/* HDMI DDC */
 	i2c@7000c700 {
 		status = "okay";
@@ -426,13 +452,5 @@
 
 			gpios = <&pmic 4 GPIO_ACTIVE_LOW>;
 		};
-	};
-
-	lvds_edp_bl: backlight {
-		compatible = "pwm-backlight";
-		enable-gpios = <&gpio TEGRA_GPIO(R, 2) GPIO_ACTIVE_HIGH>;
-		pwms = <&tegra_pwm 3 1000000>;
-		brightness-levels = <0 4 8 16 32 64 128 255>;
-		default-brightness-level = <7>;
 	};
 };
