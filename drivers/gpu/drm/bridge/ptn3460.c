@@ -348,3 +348,12 @@ err:
 	return ret;
 }
 EXPORT_SYMBOL(ptn3460_init);
+
+/* 
+ * Get rid of taint message by declaring code as GPL. 
+ */
+MODULE_LICENSE("GPL");
+
+
+MODULE_DESCRIPTION("NXP PTN3460 eDP to LVDS driver");	/* What does this module do */
+
