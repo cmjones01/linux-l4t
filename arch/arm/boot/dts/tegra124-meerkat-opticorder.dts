@@ -180,7 +180,7 @@
 			ports {
 				port@0 {
 					bridge_out: endpoint {
-						remote-endpoint = <&panel-ch070oldl-002>;
+						remote-endpoint = <&edp_panel>;
 					};
 				};
 			};
