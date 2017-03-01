@@ -264,6 +264,7 @@ dtb-$(CONFIG_ARCH_TEGRA) += tegra20-harmony.dtb \
 	tegra124-plink.dtb \
 	tegra124-clearview.dtb \
 	tegra124-meerkat-evalboard.dtb \
+	tegra124-meerkat-opticorder.dtb \
 	tegra124-meerkat-evalboard-picam.dtb \
 	tegra124-meerkat-evalboard-lvds.dtb \
 	tegra124-meerkat-evalboard-auo-g156htn.dtb \
