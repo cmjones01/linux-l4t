@@ -271,6 +271,7 @@ int ptn3460_init(struct drm_device *dev, struct drm_encoder *encoder,
 	struct drm_bridge *bridge;
 	struct ptn3460_bridge *ptn_bridge;
 
+	dev_info(&client->dev,"ptn3460_init starting\n");
 	bridge = devm_kzalloc(dev->dev, sizeof(*bridge), GFP_KERNEL);
 	if (!bridge) {
 		DRM_ERROR("Failed to allocate drm bridge\n");
@@ -338,6 +339,7 @@ int ptn3460_init(struct drm_device *dev, struct drm_encoder *encoder,
 	drm_sysfs_connector_add(&ptn_bridge->connector);
 	drm_mode_connector_attach_encoder(&ptn_bridge->connector, encoder);
 
+	dev_info(&client->dev,"ptn3460_init completed OK\n");
 	return 0;
 
 err:
@@ -345,6 +347,7 @@ err:
 		gpio_free(ptn_bridge->gpio_pd_n);
 	if (gpio_is_valid(ptn_bridge->gpio_rst_n))
 		gpio_free(ptn_bridge->gpio_rst_n);
+	dev_info(&client->dev,"ptn3460_init failed\n");
 	return ret;
 }
 EXPORT_SYMBOL(ptn3460_init);

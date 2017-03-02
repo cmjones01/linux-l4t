@@ -49,7 +49,7 @@
 					nvidia,out-width = <152>;
 					nvidia,out-height = <91>;
 					nvidia,out-flags = <TEGRA_DC_OUT_CONTINUOUS_MODE>;
-					nvidia,out-parent-clk = "pll_d2";
+					nvidia,out-parent-clk = "pll_d_out0";
 					nvidia,out-xres = <800>;
 					nvidia,out-yres = <480>;
 					nvidia,out-depth = <18>;

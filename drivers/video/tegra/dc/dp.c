@@ -1517,9 +1517,11 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 			return -EPROBE_DEFER;
 		/* No OF, fallback on creating the device here */
 		err = tegra_dc_dp_probe(dc->ndev);
+		dev_err(&dc->ndev->dev, "dp: tegra_dc_dp_probe failed\n");
 		if (err)
 			return err;
 	} else if (dp_instance->dc && dp_instance->dc != dc) {
+		dev_err(&dc->ndev->dev, "dp: dp_instance error\n");
 		return -EBUSY;
 	}
 
@@ -1652,7 +1654,7 @@ static void tegra_dp_lt_config(struct tegra_dc_dp_data *dp,
 			break;
 		default:
 			dev_err(&dp->dc->ndev->dev,
-				"dp: incorrect lane cnt\n");
+				"dp: incorrect lane cnt %d\n",cnt);
 		}
 		pe_reg = tegra_dp_pe_regs[pc[cnt]][vs[cnt]][pe[cnt]];
 		vs_reg = tegra_dp_vs_regs[pc[cnt]][vs[cnt]][pe[cnt]];
