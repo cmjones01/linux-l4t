@@ -140,8 +140,8 @@
 	};
 
 	pcie-controller {
-		nvidia,port0_status = <1>;
-		nvidia,port1_status = <0>;
+		nvidia,port0_status = <0>;
+		nvidia,port1_status = <1>;
 		nvidia,lanes = <TEGRA_PCIE_LANES_X2_X1>;
 		status = "okay";
 	};
