@@ -33,9 +33,11 @@
 			};
 			uart2_rxd_pc3 {
 				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,function = "uartb";
 			};
 			uart2_txd_pc2 {
 				nvidia,tristate = <TEGRA_PIN_ENABLE>;
+				nvidia,function = "uartb";
 			};
 			ph3 {
 				nvidia,function = "pwm3";
