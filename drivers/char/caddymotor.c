@@ -15,6 +15,7 @@
 
 #include <asm/cacheflush.h>
 
+#include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/proc_fs.h>
@@ -25,7 +26,7 @@
 #include <linux/sched.h>
 #include "linux/cdev.h"
 
-define CADDYMOTOR_BUF_SIZE 100
+#define CADDYMOTOR_BUF_SIZE 100
 #define CADDYMOTOR_POLL_INTERVAL (HZ/10)
 
 /* character device start number */
@@ -153,14 +154,13 @@ static struct file_operations caddymotor_fops = {
 /* proc interface */
 static ssize_t proc_read_caddymotor(struct file *file, char *buf,
 		size_t nbytes, loff_t *ppos);
-static ssize_t proc_write_caddymotor(struct file *file, const char *buffer,
-		size_t count, loff_t *ppos);
 
-static struct file_operations proc_caddymotor_operations = {
-	read:	proc_read_caddymotor,
-	write:	proc_write_caddymotor
+static struct proc_dir_entry *proc_file_entry;
+static const struct file_operations proc_caddymotor_operations = {
+	.owner = THIS_MODULE,
+	.read = proc_read_caddymotor,
 };
-static struct proc_dir_entry *proc_caddymotor;
+
 #define PROC_CADDYMOTOR "caddymotor"
 
 static char * caddymotor_hex_to_buf(char *buf, int buflen, uint8_t addr, uint8_t val) {
@@ -323,18 +323,6 @@ static int proc_read_caddymotor(struct file *filp, char *buf,
 	return count;
 }
 
-static ssize_t proc_write_caddymotor(struct file *filp, const char *buffer,
-		size_t count, loff_t *ppos)
-{
-	/* struct caddymotor_dev *mp= (struct caddymotor_dev *)filp->private_data;
-	 * if (strncmp(buff,"reset:",6)==0)
-	 * newRegValue = simple_strtoul(buffer,&endp,0);
-	 * a bold but simple claim is to have read it all
-	 */
-	return count;
-}
-
-
 /* driver initialisation */
 
 static int __init caddymotor_probe(struct platform_device *pdev)
@@ -409,6 +397,7 @@ static int __init caddymotor_init(void)
 	if (ret) {
 		goto error_region;
 	}
+	ret = -ENOMEM;
 
 	/* create the class and devices */
 	caddymotor_class = class_create(THIS_MODULE, "caddymotor");
@@ -423,9 +412,9 @@ static int __init caddymotor_init(void)
 		goto error_bus;
 
 	/* create proc access*/
-	proc_caddymotor = create_proc_entry(PROC_CADDYMOTOR, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH, NULL);
-	if (proc_caddymotor)
-		proc_caddymotor->proc_fops = &proc_caddymotor_operations;
+	proc_file_entry = proc_create(PROC_CADDYMOTOR, 0, NULL, &proc_caddymotor_operations);
+	if(proc_file_entry == NULL)
+		goto error_bus;
 
 	/* register the driver */
 	return platform_driver_register(&caddymotor_driver);
