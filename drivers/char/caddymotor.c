@@ -24,6 +24,10 @@
 #include <linux/spinlock.h>
 #include <linux/timer.h>
 #include <linux/sched.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
 #include "linux/cdev.h"
 
 #define CADDYMOTOR_BUF_SIZE 100
@@ -41,6 +45,12 @@ static void caddymotor_timer_callback(unsigned long arg);
 
 static struct timer_list caddytimer = TIMER_INITIALIZER(caddymotor_timer_callback, 0L, 0);
 
+//static  struct of_device_id caddymotor_of_match[] __initdata = {
+static  struct of_device_id caddymotor_of_match[] = {
+  { .compatible = "cerebriam,caddymotor", },
+  {}
+};
+
 /* caddymotor per device data */
 static struct caddymotor_dev {
 	struct fasync_struct *async_queue;
@@ -50,7 +60,13 @@ static struct caddymotor_dev {
 	char *dataend;
 	struct cdev cdev;
 	int nreaders;
-	/* records of values from the I/O ports */
+	/* GPIO pins */
+	int gpio_clk;
+	int gpio_en;
+	int gpio_dir;
+	int gpio_reset;
+	int gpio_half_full;
+	int gpio_control;
 } caddymotor;
 
 /* SAMOSA access/parsing functions */
@@ -325,12 +341,32 @@ static int proc_read_caddymotor(struct file *filp, char *buf,
 
 /* driver initialisation */
 
-static int __init caddymotor_probe(struct platform_device *pdev)
+//static int __init caddymotor_probe(struct platform_device *pdev)
+static int caddymotor_probe(struct platform_device *pdev)
 {
-
-	dev_info(&pdev->dev, "Opticorder caddy motor support installed\n");
-
+	int ret;
+	const struct of_device_id *match;
+	
+	dev_info(&pdev->dev, "Opticorder caddy motor support installing...\n");
+	match = of_match_device(caddymotor_of_match, &pdev->dev);
+	if(!match) {
+		dev_err(&pdev->dev, "Couldn't find device tree node\n");
+		return -EINVAL;
+	}
+  /* set up GPIOs */
+  caddymotor.gpio_clk = of_get_named_gpio(pdev->dev.of_node, "gpio-clk", 0);
+  if(gpio_is_valid(caddymotor.gpio_clk)) {
+  	dev_info(&pdev->dev, "gpio_clk %d\n",caddymotor.gpio_clk);
+  	ret = gpio_request_one(caddymotor.gpio_clk,GPIOF_OUT_INIT_LOW, "CADDYMOTOR_CLK");
+  	if(ret)
+  		goto error_bus;
+	} else {
+		goto error_bus;
+	}
 	return 0;
+error_bus:
+	dev_err(&pdev->dev,"failed.\n");
+	return ret;
 }
 
 static int __exit caddymotor_remove(struct platform_device *dev)
@@ -366,6 +402,7 @@ static struct platform_driver caddymotor_driver = {
 	.driver		= {
 		.owner	= THIS_MODULE,
 		.name	= "caddymotor",
+		.of_match_table = caddymotor_of_match,
 	},
 };
 
@@ -427,6 +464,7 @@ error_class_device:
 error_region:
 	unregister_chrdev_region(dev, 1);
 error:
+	
 	return ret;
 }
 
@@ -453,6 +491,8 @@ static void __exit caddymotor_exit(void)
 	/* remove class */
 	class_destroy(caddymotor_class);
 }
+
+MODULE_DEVICE_TABLE(of, caddymotor_of_match);
 
 module_init(caddymotor_init);
 module_exit(caddymotor_exit);
