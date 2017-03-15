@@ -651,4 +651,10 @@ config TEGRA_PFLASH
 	help
 	Enable tegra pflash helper driver for Nvidia's board.
 
+config CADDY_MOTOR
+	tristate "Opticorder caddy motor driver"
+	default m
+	depends on ARCH_TEGRA
+	help
+		Opticorder caddy motor driver
 endmenu
