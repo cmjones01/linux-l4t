@@ -463,4 +463,9 @@
 			gpios = <&pmic 4 GPIO_ACTIVE_LOW>;
 		};
 	};
+	
+	caddymotor@0 {
+		compatible = "cerebriam,caddymotor";
+		gpio-clk = <&gpio TEGRA_GPIO(H,3)>;
+	};
 };
