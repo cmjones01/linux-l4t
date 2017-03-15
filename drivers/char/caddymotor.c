@@ -24,7 +24,6 @@
 #include <linux/timer.h>
 #include <linux/sched.h>
 #include "linux/cdev.h"
-#include "charset.h"
 
 define CADDYMOTOR_BUF_SIZE 100
 #define CADDYMOTOR_POLL_INTERVAL (HZ/10)
@@ -94,7 +93,8 @@ static ssize_t read_samosa_hex(unsigned char reg, struct file *file, char *buf,
 
 	if(*ppos>0)
 		return 0;
-	val=samosa_read8(reg);
+	//val=samosa_read8(reg);
+	val = 0;
 	sprintf(outputbuf,"%02x",val);
 
 	if(copy_to_user(buf,outputbuf,2))
@@ -122,7 +122,7 @@ static ssize_t write_samosa_hex(unsigned char reg, struct file *file, const char
 
 	samosa_data = simple_strtoul(p,&pp,0);
 	if (pp && (pp > p)) {
-		samosa_write8(reg, samosa_data);
+		//samosa_write8(reg, samosa_data);
 	}
 	else
 		pr_info("cannot parse data from <%s> reg 0x%02x\n",p,reg);
@@ -186,9 +186,6 @@ static void caddymotor_timer_callback(unsigned long arg) {
 static int caddymotor_open(struct inode *inode, struct file *filp)
 {
 	struct caddymotor_dev *devp;
-
-	if (samosa_sm_present())
-		return -ENODEV;
 
 	devp = container_of(inode->i_cdev, struct caddymotor_dev, cdev);
 	filp->private_data = devp;
@@ -340,7 +337,7 @@ static ssize_t proc_write_caddymotor(struct file *filp, const char *buffer,
 
 /* driver initialisation */
 
-static int __init caddymotor_probe(struct samosa_device *pdev)
+static int __init caddymotor_probe(struct platform_device *pdev)
 {
 
 	dev_info(&pdev->dev, "Opticorder caddy motor support installed\n");
@@ -348,19 +345,19 @@ static int __init caddymotor_probe(struct samosa_device *pdev)
 	return 0;
 }
 
-static int __exit caddymotor_remove(struct samosa_device *dev)
+static int __exit caddymotor_remove(struct platform_device *dev)
 {
-	samosa_set_drvdata(dev, NULL);
+	platform_set_drvdata(dev, NULL);
 	return 0;
 }
 
 #ifdef CONFIG_PM
-static int caddymotor_suspend(struct samosa_device *dev, pm_message_t state)
+static int caddymotor_suspend(struct platform_device *dev, pm_message_t state)
 {
 	return 0;
 }
 
-static int caddymotor_resume(struct samosa_device *dev)
+static int caddymotor_resume(struct platform_device *dev)
 {
 	return 0;
 }
@@ -372,7 +369,7 @@ static int caddymotor_resume(struct samosa_device *dev)
 #define caddymotor_shutdown	NULL
 
 /* driver definition */
-static struct samosa_driver caddymotor_driver = {
+static struct platform_driver caddymotor_driver = {
 	.probe		= caddymotor_probe,
 	.shutdown	= caddymotor_shutdown,
 	.remove		= __exit_p(caddymotor_remove),
@@ -385,7 +382,7 @@ static struct samosa_driver caddymotor_driver = {
 };
 
 /* bus device */
-static struct samosa_device *caddymotor_device;
+static struct platform_device *caddymotor_device;
 
 /* class object */
 static struct class *caddymotor_class;
@@ -419,10 +416,10 @@ static int __init caddymotor_init(void)
 	if (!device_create(caddymotor_class, NULL, (dev), NULL, "caddymotor"))
 		goto error_class_device;
 	/* register the device on a bus. */
-	caddymotor_device=samosa_device_alloc("caddymotor",0);
+	caddymotor_device=platform_device_alloc("caddymotor",0);
 	if(!caddymotor_device)
 		goto error_bus;
-	if(samosa_device_add(caddymotor_device))
+	if(platform_device_add(caddymotor_device))
 		goto error_bus;
 
 	/* create proc access*/
@@ -431,11 +428,11 @@ static int __init caddymotor_init(void)
 		proc_caddymotor->proc_fops = &proc_caddymotor_operations;
 
 	/* register the driver */
-	return samosa_driver_register(&caddymotor_driver);
+	return platform_driver_register(&caddymotor_driver);
 
 error_bus:
-	/* remove samosa device */
-	samosa_device_unregister(caddymotor_device);
+	/* remove platform device */
+	platform_device_unregister(caddymotor_device);
 error_class_device:
 	device_destroy(caddymotor_class, dev);
 error_region:
@@ -453,13 +450,13 @@ static void __exit caddymotor_exit(void)
 	/* remove class device */
 	device_destroy(caddymotor_class, (dev));
 
-	/* remove samosa device */
-	samosa_device_unregister(caddymotor_device);
+	/* remove platform device */
+	platform_device_unregister(caddymotor_device);
 
 	/* remove character device */
 	cdev_del(&caddymotor.cdev);
 	/* remove driver */
-	samosa_driver_unregister(&caddymotor_driver);
+	platform_driver_unregister(&caddymotor_driver);
 
 	/* unregister region */
 	unregister_chrdev_region(dev, 1);
