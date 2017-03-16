@@ -318,6 +318,11 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 	char *p;
 	char *q;
 	
+	int motor = iminor(filp->f_path.dentry->d_inode);
+	
+	if(motor<0 || motor>=caddymotor.num_motors)
+		return -EINVAL;
+		
 	if(size >= (sizeof(parse_buf)-1))
 		return -EFAULT;
 	if(copy_from_user(parse_buf,buf,size))
@@ -342,9 +347,9 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 	if(distance<0)
 		return -EINVAL;
 		
-	pr_info("speed %d distance %d\n",speed,distance);
-	motors[0].speed = speed;
-	motors[0].distance = distance;
+	pr_info("motor %d speed %d distance %d\n",motor,speed,distance);
+	motors[motor].speed = speed;
+	motors[motor].distance = distance;
 	if(!timer_pending(&caddytimer))
 		mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 	return size;
