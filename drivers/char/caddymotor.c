@@ -80,6 +80,9 @@ static struct caddymotor_dev {
 	int num_motors;
 } caddymotor;
 
+/* class object */
+static struct class *caddymotor_class;
+
 /* SAMOSA access/parsing functions */
 
 static ssize_t read_hex(unsigned char val, struct file *file, char *buf, size_t nbytes, loff_t *ppos);
@@ -426,36 +429,56 @@ static int caddymotor_probe(struct platform_device *pdev)
 {
 	int ret;
 	const struct of_device_id *match;
-	
+	struct device_node *node, *pp;
+	int motor;
+
 	dev_info(&pdev->dev, "Opticorder caddy motor support installing...\n");
 	match = of_match_device(caddymotor_of_match, &pdev->dev);
 	if(!match) {
 		dev_err(&pdev->dev, "Couldn't find device tree node, exiting\n");
 		return -EINVAL;
 	}
-  /* set up GPIOs */
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-clk", "CADDYMOTOR_CLK", &(motors[0].gpio_clk)))
-		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-en", "CADDYMOTOR_EN", &(motors[0].gpio_en)))
-		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-dir", "CADDYMOTOR_DIR", &(motors[0].gpio_dir)))
-		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-reset", "CADDYMOTOR_RESET", &(motors[0].gpio_reset)))
-		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-half-full", "CADDYMOTOR_HALF_FULL", &(motors[0].gpio_half_full)))
-		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-control", "CADDYMOTOR_CONTROL", &(motors[0].gpio_control)))
-		goto error_bus;
+	node = pdev->dev.of_node;
+	caddymotor.num_motors = of_get_child_count(node);
+	if(caddymotor.num_motors > NUM_MOTORS) {
+		dev_warn(&pdev->dev, "Found %d motors, using only the first %d\n",caddymotor.num_motors,NUM_MOTORS);
+		caddymotor.num_motors = NUM_MOTORS;
+	}
+	if(caddymotor.num_motors == 0) {
+		dev_warn(&pdev->dev, "No motors found in device tree\n");
+		return 0;
+	}
 	/* create the caddymotor character device */
 	/* initialise character device */
 	cdev_init(&caddymotor.cdev, &caddymotor_fops);
 	/* claim ownership */
 	caddymotor.cdev.owner = THIS_MODULE;
 	/* add character device */
-	ret = cdev_add(&caddymotor.cdev, dev, 1);
+	ret = cdev_add(&caddymotor.cdev, dev, caddymotor.num_motors);
 	if (ret) {
 		goto error_bus;
 	}
+	motor = 0;
+	for_each_child_of_node(node, pp) {
+		dev_info(&pdev->dev, "Motor %d:\n",motor);
+		if(motor>=caddymotor.num_motors)
+			break;
+	  /* set up GPIOs */
+		if(caddymotor_add_gpio(pdev, pp, "gpio-clk", "CADDYMOTOR_CLK", &(motors[motor].gpio_clk)))
+			continue;
+		if(caddymotor_add_gpio(pdev, pp, "gpio-en", "CADDYMOTOR_EN", &(motors[motor].gpio_en)))
+			continue;
+		if(caddymotor_add_gpio(pdev, pp, "gpio-dir", "CADDYMOTOR_DIR", &(motors[motor].gpio_dir)))
+			continue;
+		if(caddymotor_add_gpio(pdev, pp, "gpio-reset", "CADDYMOTOR_RESET", &(motors[motor].gpio_reset)))
+			continue;
+		if(caddymotor_add_gpio(pdev, pp, "gpio-half-full", "CADDYMOTOR_HALF_FULL", &(motors[motor].gpio_half_full)))
+			continue;
+		if(caddymotor_add_gpio(pdev, pp, "gpio-control", "CADDYMOTOR_CONTROL", &(motors[motor].gpio_control)))
+			continue;
+		if (!device_create(caddymotor_class, NULL, (dev), NULL, "caddymotor"))
+			continue;
+	}		
 
 	caddytimer.data = (unsigned long)pdev;
 
@@ -514,8 +537,6 @@ static struct platform_driver caddymotor_driver = {
 /* bus device */
 static struct platform_device *caddymotor_device;
 
-/* class object */
-static struct class *caddymotor_class;
 
 static int __init caddymotor_init(void)
 {
@@ -525,15 +546,13 @@ static int __init caddymotor_init(void)
 	spin_lock_init(&caddymotor_lock);
 
 	/* register a range of device nodes */
-	ret = alloc_chrdev_region(&dev, 0, 1, "caddymotor");
+	ret = alloc_chrdev_region(&dev, 0, NUM_MOTORS, "caddymotor");
 	if (ret)
 		goto error;
 
 	/* create the class and devices */
 	caddymotor_class = class_create(THIS_MODULE, "caddymotor");
 
-	if (!device_create(caddymotor_class, NULL, (dev), NULL, "caddymotor"))
-		goto error_class_device;
 	/* register the device on a bus. */
 	caddymotor_device=platform_device_alloc("caddymotor",0);
 	if(!caddymotor_device)

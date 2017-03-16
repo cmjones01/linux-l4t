@@ -466,11 +466,22 @@
 	
 	caddymotor {
 		compatible = "cerebriam,caddymotor";
-		gpio-clk = <&gpio TEGRA_GPIO(H,3) GPIO_ACTIVE_HIGH>;
-		gpio-en = <&gpio TEGRA_GPIO(H,5) GPIO_ACTIVE_HIGH>;
-		gpio-dir = <&gpio TEGRA_GPIO(H,6) GPIO_ACTIVE_HIGH>;
-		gpio-reset = <&gpio TEGRA_GPIO(I,2) GPIO_ACTIVE_HIGH>;
-		gpio-half-full = <&gpio TEGRA_GPIO(I,5) GPIO_ACTIVE_HIGH>;
-		gpio-control = <&gpio TEGRA_GPIO(I,7) GPIO_ACTIVE_HIGH>;
+		
+		motor@0 {
+			gpio-clk = <&gpio TEGRA_GPIO(H,3) GPIO_ACTIVE_HIGH>;
+			gpio-en = <&gpio TEGRA_GPIO(H,5) GPIO_ACTIVE_HIGH>;
+			gpio-dir = <&gpio TEGRA_GPIO(H,6) GPIO_ACTIVE_HIGH>;
+			gpio-reset = <&gpio TEGRA_GPIO(I,2) GPIO_ACTIVE_HIGH>;
+			gpio-half-full = <&gpio TEGRA_GPIO(I,5) GPIO_ACTIVE_HIGH>;
+			gpio-control = <&gpio TEGRA_GPIO(I,7) GPIO_ACTIVE_HIGH>;
+		};
+		motor@1 {
+			gpio-clk = <&gpio TEGRA_GPIO(K,0) GPIO_ACTIVE_HIGH>;
+			gpio-en = <&gpio TEGRA_GPIO(J,0) GPIO_ACTIVE_HIGH>;
+			gpio-dir = <&gpio TEGRA_GPIO(K,1) GPIO_ACTIVE_HIGH>;
+			gpio-reset = <&gpio TEGRA_GPIO(K,2) GPIO_ACTIVE_HIGH>;
+			gpio-half-full = <&gpio TEGRA_GPIO(K,3) GPIO_ACTIVE_HIGH>;
+			gpio-control = <&gpio TEGRA_GPIO(K,4) GPIO_ACTIVE_HIGH>;
+		};
 	};
 };
