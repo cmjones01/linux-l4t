@@ -476,8 +476,9 @@ static int caddymotor_probe(struct platform_device *pdev)
 			continue;
 		if(caddymotor_add_gpio(pdev, pp, "gpio-control", "CADDYMOTOR_CONTROL", &(motors[motor].gpio_control)))
 			continue;
-		if (!device_create(caddymotor_class, NULL, (dev), NULL, "caddymotor"))
+		if (!device_create(caddymotor_class, NULL, MKDEV(MAJOR(dev),motor), NULL, "cm%d",motor))
 			continue;
+		motor++;
 	}		
 
 	caddytimer.data = (unsigned long)pdev;
