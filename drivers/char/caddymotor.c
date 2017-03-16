@@ -206,26 +206,31 @@ static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 }
 
 static void caddymotor_timer_callback(unsigned long arg) {
-	int speed = motors[0].speed;
-	int distance = motors[0].distance;
-	//struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
-	if(speed != 0) {
-		gpio_set_value(motors[0].gpio_en,1);
-		gpio_set_value(motors[0].gpio_reset,1);
-		gpio_set_value(motors[0].gpio_control,1);
-		gpio_set_value(motors[0].gpio_dir,(speed<0)?0:1);
-		if(distance > 0) {
-			gpio_set_value(motors[0].gpio_clk,1);
-			udelay(5);
-			motors[0].distance--;
-			gpio_set_value(motors[0].gpio_clk,0);
-			mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
+	int motor;
+	int continue_polling = 0;
+	for(motor = 0; motor<caddymotor.num_motors;motor++) {
+		//struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
+		if(motors[motor].speed != 0) {
+			gpio_set_value(motors[motor].gpio_en,1);
+			gpio_set_value(motors[motor].gpio_reset,1);
+			gpio_set_value(motors[motor].gpio_control,1);
+			gpio_set_value(motors[motor].gpio_dir,(motors[motor].speed<0)?0:1);
+			if(motors[motor].distance > 0) {
+				gpio_set_value(motors[motor].gpio_clk,1);
+				udelay(5);
+				motors[motor].distance--;
+				gpio_set_value(motors[motor].gpio_clk,0);
+				continue_polling=1;
+			} else {
+				motors[motor].speed = 0;
+				gpio_set_value(motors[motor].gpio_en,0);
+			}
 		} else {
-			motors[0].speed = 0;
-			gpio_set_value(motors[0].gpio_en,0);
+			gpio_set_value(motors[motor].gpio_en,0);
 		}
-	} else {
-		gpio_set_value(motors[0].gpio_en,0);
+	}
+	if(continue_polling) {
+		mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 	}
 	wake_up_interruptible(&tickq);
 }
@@ -491,15 +496,19 @@ error_bus:
 
 static int __exit caddymotor_remove(struct platform_device *pdev)
 {
+	int motor;
+	
 	dev_info(&pdev->dev, "Opticorder caddy motor support removing\n");
 	if(timer_pending(&caddytimer))
 		del_timer(&caddytimer);
-	caddymotor_del_gpio(pdev, motors[0].gpio_clk);
-	caddymotor_del_gpio(pdev, motors[0].gpio_en);
-	caddymotor_del_gpio(pdev, motors[0].gpio_dir);
-	caddymotor_del_gpio(pdev, motors[0].gpio_reset);
-	caddymotor_del_gpio(pdev, motors[0].gpio_half_full);
-	caddymotor_del_gpio(pdev, motors[0].gpio_control);
+	for(motor = 0; motor<caddymotor.num_motors;motor++) {
+		caddymotor_del_gpio(pdev, motors[motor].gpio_clk);
+		caddymotor_del_gpio(pdev, motors[motor].gpio_en);
+		caddymotor_del_gpio(pdev, motors[motor].gpio_dir);
+		caddymotor_del_gpio(pdev, motors[motor].gpio_reset);
+		caddymotor_del_gpio(pdev, motors[motor].gpio_half_full);
+		caddymotor_del_gpio(pdev, motors[motor].gpio_control);
+	}
 	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
@@ -583,12 +592,15 @@ error:
 
 static void __exit caddymotor_exit(void)
 {
-
+	int motor;
+	
 	/* remove proc entry */
 	remove_proc_entry(PROC_CADDYMOTOR, NULL);
 
 	/* remove class device */
-	device_destroy(caddymotor_class, (dev));
+	for(motor=0;motor<caddymotor.num_motors;motor++) {
+		device_destroy(caddymotor_class, MKDEV(MAJOR(dev),motor));
+	}
 
 	/* remove platform device */
 	platform_device_unregister(caddymotor_device);
