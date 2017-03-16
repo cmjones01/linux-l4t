@@ -31,7 +31,7 @@
 #include "linux/cdev.h"
 
 #define CADDYMOTOR_BUF_SIZE 100
-#define CADDYMOTOR_POLL_INTERVAL (HZ/10)
+#define CADDYMOTOR_POLL_INTERVAL (HZ/100)
 #define NUM_MOTORS 2
 
 /* character device start number */
@@ -205,17 +205,25 @@ static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 static void caddymotor_timer_callback(unsigned long arg) {
 	int speed = motors[0].speed;
 	int distance = motors[0].distance;
-	printk(KERN_WARNING "caddymotor_timer %d %d\n",speed,distance);
 	//struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
 	if(speed != 0) {
+		gpio_set_value(motors[0].gpio_en,1);
+		gpio_set_value(motors[0].gpio_reset,1);
+		gpio_set_value(motors[0].gpio_control,1);
+		gpio_set_value(motors[0].gpio_dir,(speed<0)?0:1);
 		if(distance > 0) {
+			gpio_set_value(motors[0].gpio_clk,1);
+			udelay(5);
 			motors[0].distance--;
+			gpio_set_value(motors[0].gpio_clk,0);
 			printk(KERN_WARNING "distance %d\n",motors[0].distance);
 		} else {
 			motors[0].speed = 0;
+			gpio_set_value(motors[0].gpio_en,0);
 			printk(KERN_WARNING "stopped\n");
 		}
 	} else {
+		gpio_set_value(motors[0].gpio_en,0);
 	}
 	wake_up_interruptible(&tickq);
 	mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
@@ -405,8 +413,9 @@ static int caddymotor_add_gpio(struct platform_device *pdev, struct device_node 
 	return 0;
 }
 
-static void caddymotor_del_gpio(int gpio) {
-	return;
+static void caddymotor_del_gpio(struct platform_device *pdev, int gpio) {
+ 	dev_info(&pdev->dev, "freeing gpio %d\n",gpio);
+
 	if(gpio_is_valid(gpio))
 		gpio_free(gpio);
 }
@@ -422,7 +431,7 @@ static int caddymotor_probe(struct platform_device *pdev)
 	match = of_match_device(caddymotor_of_match, &pdev->dev);
 	if(!match) {
 		dev_err(&pdev->dev, "Couldn't find device tree node, exiting\n");
-		return 0;
+		return -EINVAL;
 	}
   /* set up GPIOs */
 	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-clk", "CADDYMOTOR_CLK", &(motors[0].gpio_clk)))
@@ -458,16 +467,17 @@ error_bus:
 	return ret;
 }
 
-static int __exit caddymotor_remove(struct platform_device *dev)
+static int __exit caddymotor_remove(struct platform_device *pdev)
 {
+	dev_info(&pdev->dev, "Opticorder caddy motor support removing\n");
 	del_timer(&caddytimer);
-	caddymotor_del_gpio(motors[0].gpio_clk);
-	caddymotor_del_gpio(motors[0].gpio_en);
-	caddymotor_del_gpio(motors[0].gpio_dir);
-	caddymotor_del_gpio(motors[0].gpio_reset);
-	caddymotor_del_gpio(motors[0].gpio_half_full);
-	caddymotor_del_gpio(motors[0].gpio_control);
-	platform_set_drvdata(dev, NULL);
+	caddymotor_del_gpio(pdev, motors[0].gpio_clk);
+	caddymotor_del_gpio(pdev, motors[0].gpio_en);
+	caddymotor_del_gpio(pdev, motors[0].gpio_dir);
+	caddymotor_del_gpio(pdev, motors[0].gpio_reset);
+	caddymotor_del_gpio(pdev, motors[0].gpio_half_full);
+	caddymotor_del_gpio(pdev, motors[0].gpio_control);
+	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
 
