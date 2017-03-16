@@ -404,6 +404,11 @@ static int caddymotor_add_gpio(struct platform_device *pdev, struct device_node 
 	}
 	return 0;
 }
+
+static void caddymotor_del_gpio(int gpio) {
+	if(gpio_is_valid(gpio))
+		gpio_free(gpio);
+}
 /* driver initialisation */
 
 //static int __init caddymotor_probe(struct platform_device *pdev)
@@ -415,8 +420,8 @@ static int caddymotor_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "Opticorder caddy motor support installing...\n");
 	match = of_match_device(caddymotor_of_match, &pdev->dev);
 	if(!match) {
-		dev_err(&pdev->dev, "Couldn't find device tree node\n");
-		return -EINVAL;
+		dev_err(&pdev->dev, "Couldn't find device tree node, exiting\n");
+		return 0;
 	}
   /* set up GPIOs */
 	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-clk", "CADDYMOTOR_CLK", &(caddymotor.motors[0]->gpio_clk)))
@@ -443,8 +448,9 @@ static int caddymotor_probe(struct platform_device *pdev)
 	}
 
 	caddytimer.data = (unsigned long)pdev;
-	mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 
+	ret=mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
+	dev_info(&pdev->dev,"mod_timer returned %d\n",ret);
 	return 0;
 error_bus:
 	dev_err(&pdev->dev,"failed.\n");
@@ -453,6 +459,13 @@ error_bus:
 
 static int __exit caddymotor_remove(struct platform_device *dev)
 {
+	del_timer(&caddytimer);
+	caddymotor_del_gpio(caddymotor.motors[0]->gpio_clk);
+	caddymotor_del_gpio(caddymotor.motors[0]->gpio_en);
+	caddymotor_del_gpio(caddymotor.motors[0]->gpio_dir);
+	caddymotor_del_gpio(caddymotor.motors[0]->gpio_reset);
+	caddymotor_del_gpio(caddymotor.motors[0]->gpio_half_full);
+	caddymotor_del_gpio(caddymotor.motors[0]->gpio_control);
 	platform_set_drvdata(dev, NULL);
 	return 0;
 }
