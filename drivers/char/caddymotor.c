@@ -216,17 +216,15 @@ static void caddymotor_timer_callback(unsigned long arg) {
 			udelay(5);
 			motors[0].distance--;
 			gpio_set_value(motors[0].gpio_clk,0);
-			printk(KERN_WARNING "distance %d\n",motors[0].distance);
+			mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 		} else {
 			motors[0].speed = 0;
 			gpio_set_value(motors[0].gpio_en,0);
-			printk(KERN_WARNING "stopped\n");
 		}
 	} else {
 		gpio_set_value(motors[0].gpio_en,0);
 	}
 	wake_up_interruptible(&tickq);
-	mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 }
 
 static int caddymotor_open(struct inode *inode, struct file *filp)
@@ -339,6 +337,8 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 	pr_info("speed %d distance %d\n",speed,distance);
 	motors[0].speed = speed;
 	motors[0].distance = distance;
+	if(!timer_pending(&caddytimer))
+		mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 	return size;
 }
 
@@ -459,8 +459,6 @@ static int caddymotor_probe(struct platform_device *pdev)
 
 	caddytimer.data = (unsigned long)pdev;
 
-	ret=mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
-	dev_info(&pdev->dev,"mod_timer returned %d\n",ret);
 	return 0;
 error_bus:
 	dev_err(&pdev->dev,"failed.\n");
@@ -470,7 +468,8 @@ error_bus:
 static int __exit caddymotor_remove(struct platform_device *pdev)
 {
 	dev_info(&pdev->dev, "Opticorder caddy motor support removing\n");
-	del_timer(&caddytimer);
+	if(timer_pending(&caddytimer))
+		del_timer(&caddytimer);
 	caddymotor_del_gpio(pdev, motors[0].gpio_clk);
 	caddymotor_del_gpio(pdev, motors[0].gpio_en);
 	caddymotor_del_gpio(pdev, motors[0].gpio_dir);
