@@ -464,13 +464,13 @@
 		};
 	};
 	
-	caddymotor@0 {
+	caddymotor {
 		compatible = "cerebriam,caddymotor";
-		gpio-clk = <&gpio TEGRA_GPIO(H,3)>;
-		gpio-en = <&gpio TEGRA_GPIO(H,5)>;
-		gpio-dir = <&gpio TEGRA_GPIO(H,6)>;
-		gpio-reset = <&gpio TEGRA_GPIO(I,2)>;
-		gpio-half-full = <&gpio TEGRA_GPIO(I,5)>;
-		gpio-control = <&gpio TEGRA_GPIO(I,7)>;
+		gpio-clk = <&gpio TEGRA_GPIO(H,3) GPIO_ACTIVE_HIGH>;
+		gpio-en = <&gpio TEGRA_GPIO(H,5) GPIO_ACTIVE_HIGH>;
+		gpio-dir = <&gpio TEGRA_GPIO(H,6) GPIO_ACTIVE_HIGH>;
+		gpio-reset = <&gpio TEGRA_GPIO(I,2) GPIO_ACTIVE_HIGH>;
+		gpio-half-full = <&gpio TEGRA_GPIO(I,5) GPIO_ACTIVE_HIGH>;
+		gpio-control = <&gpio TEGRA_GPIO(I,7) GPIO_ACTIVE_HIGH>;
 	};
 };
