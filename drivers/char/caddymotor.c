@@ -61,8 +61,8 @@ struct caddymotorstate_t {
 	int gpio_half_full;
 	int gpio_control;
 	/* state */
-	int speed;
-	int distance;
+	volatile int speed;
+	volatile int distance;
 };
 
 static struct caddymotorstate_t motors[NUM_MOTORS];
@@ -78,7 +78,6 @@ static struct caddymotor_dev {
 	int nreaders;
 	/* motors */
 	int num_motors;
-	struct caddymotorstate_t *motors[NUM_MOTORS];
 } caddymotor;
 
 /* SAMOSA access/parsing functions */
@@ -204,13 +203,16 @@ static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 }
 
 static void caddymotor_timer_callback(unsigned long arg) {
-	struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
-	if(devp->motors[0]->speed != 0) {
-		if(devp->motors[0]->distance > 0) {
-			devp->motors[0]->distance--;
-			printk(KERN_WARNING "distance %d\n",devp->motors[0]->distance);
+	int speed = motors[0].speed;
+	int distance = motors[0].distance;
+	printk(KERN_WARNING "caddymotor_timer %d %d\n",speed,distance);
+	//struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
+	if(speed != 0) {
+		if(distance > 0) {
+			motors[0].distance--;
+			printk(KERN_WARNING "distance %d\n",motors[0].distance);
 		} else {
-			devp->motors[0]->speed = 0;
+			motors[0].speed = 0;
 			printk(KERN_WARNING "stopped\n");
 		}
 	} else {
@@ -246,8 +248,6 @@ static int caddymotor_open(struct inode *inode, struct file *filp)
 static int caddymotor_release(struct inode *inode, struct file *filp)
 {
 	struct caddymotor_dev *devp = filp->private_data;
-	// cancel timer
-	del_timer(&caddytimer);
 
 	if(filp->f_mode & FMODE_READ)
 		devp->nreaders--;
@@ -329,8 +329,8 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		return -EINVAL;
 		
 	pr_info("speed %d distance %d\n",speed,distance);
-	caddymotor.motors[0]->speed = speed;
-	caddymotor.motors[0]->distance = distance;
+	motors[0].speed = speed;
+	motors[0].distance = distance;
 	return size;
 }
 
@@ -406,6 +406,7 @@ static int caddymotor_add_gpio(struct platform_device *pdev, struct device_node 
 }
 
 static void caddymotor_del_gpio(int gpio) {
+	return;
 	if(gpio_is_valid(gpio))
 		gpio_free(gpio);
 }
@@ -424,17 +425,17 @@ static int caddymotor_probe(struct platform_device *pdev)
 		return 0;
 	}
   /* set up GPIOs */
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-clk", "CADDYMOTOR_CLK", &(caddymotor.motors[0]->gpio_clk)))
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-clk", "CADDYMOTOR_CLK", &(motors[0].gpio_clk)))
 		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-en", "CADDYMOTOR_EN", &(caddymotor.motors[0]->gpio_en)))
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-en", "CADDYMOTOR_EN", &(motors[0].gpio_en)))
 		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-dir", "CADDYMOTOR_DIR", &(caddymotor.motors[0]->gpio_dir)))
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-dir", "CADDYMOTOR_DIR", &(motors[0].gpio_dir)))
 		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-reset", "CADDYMOTOR_RESET", &(caddymotor.motors[0]->gpio_reset)))
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-reset", "CADDYMOTOR_RESET", &(motors[0].gpio_reset)))
 		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-half-full", "CADDYMOTOR_HALF_FULL", &(caddymotor.motors[0]->gpio_half_full)))
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-half-full", "CADDYMOTOR_HALF_FULL", &(motors[0].gpio_half_full)))
 		goto error_bus;
-	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-control", "CADDYMOTOR_CONTROL", &(caddymotor.motors[0]->gpio_control)))
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-control", "CADDYMOTOR_CONTROL", &(motors[0].gpio_control)))
 		goto error_bus;
 	/* create the caddymotor character device */
 	/* initialise character device */
@@ -460,12 +461,12 @@ error_bus:
 static int __exit caddymotor_remove(struct platform_device *dev)
 {
 	del_timer(&caddytimer);
-	caddymotor_del_gpio(caddymotor.motors[0]->gpio_clk);
-	caddymotor_del_gpio(caddymotor.motors[0]->gpio_en);
-	caddymotor_del_gpio(caddymotor.motors[0]->gpio_dir);
-	caddymotor_del_gpio(caddymotor.motors[0]->gpio_reset);
-	caddymotor_del_gpio(caddymotor.motors[0]->gpio_half_full);
-	caddymotor_del_gpio(caddymotor.motors[0]->gpio_control);
+	caddymotor_del_gpio(motors[0].gpio_clk);
+	caddymotor_del_gpio(motors[0].gpio_en);
+	caddymotor_del_gpio(motors[0].gpio_dir);
+	caddymotor_del_gpio(motors[0].gpio_reset);
+	caddymotor_del_gpio(motors[0].gpio_half_full);
+	caddymotor_del_gpio(motors[0].gpio_control);
 	platform_set_drvdata(dev, NULL);
 	return 0;
 }
@@ -509,12 +510,10 @@ static struct class *caddymotor_class;
 
 static int __init caddymotor_init(void)
 {
-	int ret,n;
+	int ret;
 
 	/* general initialisation */
 	spin_lock_init(&caddymotor_lock);
-	for(n=0;n<NUM_MOTORS;n++)
-		caddymotor.motors[n] = &motors[n];
 
 	/* register a range of device nodes */
 	ret = alloc_chrdev_region(&dev, 0, 1, "caddymotor");
