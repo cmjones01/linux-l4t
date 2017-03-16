@@ -339,6 +339,22 @@ static int proc_read_caddymotor(struct file *filp, char *buf,
 	return count;
 }
 
+static int caddymotor_add_gpio(struct platform_device *pdev, struct device_node *of_node, char *node_name, char *gpio_description, int *caddymotor_gpio) {
+	int ret;
+  *caddymotor_gpio = of_get_named_gpio(of_node, node_name, 0);
+  if(gpio_is_valid(*caddymotor_gpio)) {
+  	dev_info(&pdev->dev, "%s %d\n",node_name,*caddymotor_gpio);
+  	ret = gpio_request_one(*caddymotor_gpio,GPIOF_OUT_INIT_LOW, gpio_description);
+  	if(ret) {
+  		dev_err(&pdev->dev,"Failed to get gpio\n");
+  		return ret;
+  	}
+	} else {
+ 		dev_err(&pdev->dev,"Invalid gpio\n");
+		return -EINVAL;
+	}
+	return 0;
+}
 /* driver initialisation */
 
 //static int __init caddymotor_probe(struct platform_device *pdev)
@@ -354,15 +370,29 @@ static int caddymotor_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
   /* set up GPIOs */
-  caddymotor.gpio_clk = of_get_named_gpio(pdev->dev.of_node, "gpio-clk", 0);
-  if(gpio_is_valid(caddymotor.gpio_clk)) {
-  	dev_info(&pdev->dev, "gpio_clk %d\n",caddymotor.gpio_clk);
-  	ret = gpio_request_one(caddymotor.gpio_clk,GPIOF_OUT_INIT_LOW, "CADDYMOTOR_CLK");
-  	if(ret)
-  		goto error_bus;
-	} else {
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-clk", "CADDYMOTOR_CLK", &(caddymotor.gpio_clk)))
+		goto error_bus;
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-en", "CADDYMOTOR_EN", &(caddymotor.gpio_en)))
+		goto error_bus;
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-dir", "CADDYMOTOR_DIR", &(caddymotor.gpio_dir)))
+		goto error_bus;
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-reset", "CADDYMOTOR_RESET", &(caddymotor.gpio_reset)))
+		goto error_bus;
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-half-full", "CADDYMOTOR_HALF_FULL", &(caddymotor.gpio_half_full)))
+		goto error_bus;
+	if(caddymotor_add_gpio(pdev, pdev->dev.of_node, "gpio-control", "CADDYMOTOR_CONTROL", &(caddymotor.gpio_control)))
+		goto error_bus;
+	/* create the caddymotor character device */
+	/* initialise character device */
+	cdev_init(&caddymotor.cdev, &caddymotor_fops);
+	/* claim ownership */
+	caddymotor.cdev.owner = THIS_MODULE;
+	/* add character device */
+	ret = cdev_add(&caddymotor.cdev, dev, 1);
+	if (ret) {
 		goto error_bus;
 	}
+
 	return 0;
 error_bus:
 	dev_err(&pdev->dev,"failed.\n");
@@ -423,18 +453,6 @@ static int __init caddymotor_init(void)
 	ret = alloc_chrdev_region(&dev, 0, 1, "caddymotor");
 	if (ret)
 		goto error;
-
-	/* create the caddymotor character device */
-	/* initialise character device */
-	cdev_init(&caddymotor.cdev, &caddymotor_fops);
-	/* claim ownership */
-	caddymotor.cdev.owner = THIS_MODULE;
-	/* add character device */
-	ret = cdev_add(&caddymotor.cdev, dev, 1);
-	if (ret) {
-		goto error_region;
-	}
-	ret = -ENOMEM;
 
 	/* create the class and devices */
 	caddymotor_class = class_create(THIS_MODULE, "caddymotor");
