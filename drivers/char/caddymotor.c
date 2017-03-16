@@ -281,8 +281,36 @@ failure:
 static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		  size_t size, loff_t *offp)
 {
-	/* we don't support writing at the moment */
-	return -EINVAL;
+	int speed;
+	int distance;
+	char parse_buf[20];
+	char *p;
+	char *q;
+	
+	if(size >= (sizeof(parse_buf)-1))
+		return -EFAULT;
+	if(copy_from_user(parse_buf,buf,size))
+		return -EFAULT;
+	
+	parse_buf[size]=0;
+	p=parse_buf;
+	while(isspace(*p))
+		p++;
+	speed = simple_strtol(p,&q,0);
+	if(!q || q==p)
+		return -EINVAL;
+	p=q;
+	while(isspace(*p))
+		p++;
+	/* did we find another token? */
+	if(!(*p))
+		return -EINVAL;
+	distance = simple_strtol(p,&q,0);
+	if(!q || q==p)
+		return -EINVAL;
+		
+	pr_info("speed %d distance %d\n",speed,distance);
+	return size;
 }
 
 static int caddymotor_fasync(int fd, struct file *filp, int on)
