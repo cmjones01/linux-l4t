@@ -467,5 +467,10 @@
 	caddymotor@0 {
 		compatible = "cerebriam,caddymotor";
 		gpio-clk = <&gpio TEGRA_GPIO(H,3)>;
+		gpio-en = <&gpio TEGRA_GPIO(H,5)>;
+		gpio-dir = <&gpio TEGRA_GPIO(H,6)>;
+		gpio-reset = <&gpio TEGRA_GPIO(I,2)>;
+		gpio-half-full = <&gpio TEGRA_GPIO(I,5)>;
+		gpio-control = <&gpio TEGRA_GPIO(I,7)>;
 	};
 };
