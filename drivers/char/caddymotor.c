@@ -83,83 +83,6 @@ static struct caddymotor_dev {
 /* class object */
 static struct class *caddymotor_class;
 
-/* SAMOSA access/parsing functions */
-
-static ssize_t read_hex(unsigned char val, struct file *file, char *buf, size_t nbytes, loff_t *ppos);
-static ssize_t read_samosa_hex(unsigned char reg, struct file *file, char *buf, size_t nbytes, loff_t *ppos);
-static ssize_t write_samosa_hex(unsigned char reg, struct file *file, const char *buffer,	size_t count, loff_t *ppos);
-
-static ssize_t read_hex(unsigned char val, struct file *file, char *buf,
-		size_t nbytes, loff_t *ppos) {
-	char outputbuf[4];
-	size_t bytes_to_write;
-	size_t written=0;
-	unsigned long unwritten;
-
-	bytes_to_write = (nbytes>3)?3:nbytes;
-
-	printk(KERN_WARNING "read_hex nbytes %d ppos %d bytes_to_write %d\n",nbytes,ppos,bytes_to_write);
-	if(!bytes_to_write)
-		return 0;
-
-	if(*ppos>0)
-		return 0;
-	sprintf(outputbuf,"%02x\n",val);
-
-	unwritten = copy_to_user(buf,outputbuf,bytes_to_write);
-	written += bytes_to_write - unwritten;
-
-	if (signal_pending(current))
-		return written ? written : -ERESTARTSYS;
-	//*ppos+=bytes_to_write;
-	cond_resched();
-
-	return written ? written : -EFAULT;
-}
-
-static ssize_t read_samosa_hex(unsigned char reg, struct file *file, char *buf,
-		size_t nbytes, loff_t *ppos) {
-	char val;
-	char outputbuf[3];
-
-	if(*ppos>0)
-		return 0;
-	//val=samosa_read8(reg);
-	val = 0;
-	sprintf(outputbuf,"%02x",val);
-
-	if(copy_to_user(buf,outputbuf,2))
-		return -EFAULT;
-	*ppos+=2;
-	return 2;
-}
-
-static ssize_t write_samosa_hex(unsigned char reg, struct file *file, const char *buffer,
-		size_t count, loff_t *ppos) {
-	unsigned long samosa_data;
-	char buf[40];
-	char *p = buf;
-	char *pp;
-
-	if (count >= (sizeof(buf) -1 ))
-		return -EFAULT;
-
-	if (copy_from_user(buf, buffer, count))
-		return -EFAULT;
-
-	buf[count] = 0;
-	while (isspace(*p))
-		p++;
-
-	samosa_data = simple_strtoul(p,&pp,0);
-	if (pp && (pp > p)) {
-		//samosa_write8(reg, samosa_data);
-	}
-	else
-		pr_info("cannot parse data from <%s> reg 0x%02x\n",p,reg);
-	return count;
-}
-
 /* file access functions */
 static ssize_t	caddymotor_read(struct file *, char *, size_t, loff_t *);
 static ssize_t	caddymotor_write(struct file *, const char *, size_t, loff_t *);
@@ -192,12 +115,6 @@ static const struct file_operations proc_caddymotor_operations = {
 };
 
 #define PROC_CADDYMOTOR "caddymotor"
-
-static char * caddymotor_hex_to_buf(char *buf, int buflen, uint8_t addr, uint8_t val) {
-	char localbuf[6];
-	sprintf(localbuf,"%02x:%02x\n",addr,val);
-	return strcat(buf,localbuf);
-}
 
 static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 	*(devp->buffer)='\0';
@@ -567,11 +484,13 @@ static int __init caddymotor_init(void)
 
 	/* create the class and devices */
 	caddymotor_class = class_create(THIS_MODULE, "caddymotor");
-
+	if(!caddymotor_class)
+		goto error_region;
+		
 	/* register the device on a bus. */
 	caddymotor_device=platform_device_alloc("caddymotor",0);
 	if(!caddymotor_device)
-		goto error_bus;
+		goto error_class_device;
 	if(platform_device_add(caddymotor_device))
 		goto error_bus;
 
