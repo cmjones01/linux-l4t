@@ -43,6 +43,7 @@ static spinlock_t caddymotor_lock;
 static DECLARE_WAIT_QUEUE_HEAD(tickq);
 
 static void caddymotor_timer_callback(unsigned long arg);
+static void caddymotor_init_L6228(int motor);
 
 static struct timer_list caddytimer = TIMER_INITIALIZER(caddymotor_timer_callback, 0L, 0);
 
@@ -61,6 +62,7 @@ struct caddymotorstate_t {
 	int gpio_half_full;
 	int gpio_control;
 	/* state */
+	volatile int brake;
 	volatile int speed;
 	volatile int distance;
 };
@@ -125,25 +127,28 @@ static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 static void caddymotor_timer_callback(unsigned long arg) {
 	int motor;
 	int continue_polling = 0;
+	struct caddymotorstate_t *m;
+	
 	for(motor = 0; motor<caddymotor.num_motors;motor++) {
+		m = &motors[motor];
 		//struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
-		if(motors[motor].speed != 0) {
-			gpio_set_value(motors[motor].gpio_en,1);
-			gpio_set_value(motors[motor].gpio_reset,1);
-			gpio_set_value(motors[motor].gpio_control,1);
-			gpio_set_value(motors[motor].gpio_dir,(motors[motor].speed<0)?0:1);
-			if(motors[motor].distance > 0) {
-				gpio_set_value(motors[motor].gpio_clk,1);
+		if(m->speed != 0) {
+			gpio_set_value(m->gpio_en,1);
+			gpio_set_value(m->gpio_reset,1);
+			gpio_set_value(m->gpio_control,1);
+			gpio_set_value(m->gpio_dir,(m->speed<0)?0:1);
+			if(m->distance > 0) {
+				gpio_set_value(m->gpio_clk,1);
 				udelay(5);
-				motors[motor].distance--;
-				gpio_set_value(motors[motor].gpio_clk,0);
+				m->distance--;
+				gpio_set_value(m->gpio_clk,0);
 				continue_polling=1;
 			} else {
-				motors[motor].speed = 0;
-				gpio_set_value(motors[motor].gpio_en,0);
+				m->speed = 0;
+				gpio_set_value(m->gpio_en,(m->brake)?1:0);
 			}
 		} else {
-			gpio_set_value(motors[motor].gpio_en,0);
+			gpio_set_value(m->gpio_en,(m->brake)?1:0);
 		}
 	}
 	if(continue_polling) {
@@ -349,6 +354,31 @@ static void caddymotor_del_gpio(struct platform_device *pdev, int gpio) {
 	if(gpio_is_valid(gpio))
 		gpio_free(gpio);
 }
+
+static void caddymotor_init_L6228(int motor) {
+	struct caddymotorstate_t *m = &motors[motor];
+	
+	/* put the L6228 into wave drive mode to minimise power dissipation */
+	/* take HALF/FULL high */
+	gpio_set_value(m->gpio_en,1);
+	gpio_set_value(m->gpio_half_full,1);
+	gpio_set_value(m->gpio_reset,1);
+	udelay(5);
+	/* apply reset */
+	gpio_set_value(m->gpio_reset,0);
+	udelay(5);
+	gpio_set_value(m->gpio_reset,1);
+	udelay(5);
+	/* apply one clock pulse */
+	gpio_set_value(m->gpio_clk,1);
+	udelay(5);
+	gpio_set_value(m->gpio_clk,0);
+	udelay(5);
+	/* take HALF/FULL low to ensure that L6228 is in state 2 */
+	gpio_set_value(m->gpio_half_full,0);
+	gpio_set_value(m->gpio_en,(m->brake)?1:0);
+}
+
 /* driver initialisation */
 
 //static int __init caddymotor_probe(struct platform_device *pdev)
@@ -388,6 +418,9 @@ static int caddymotor_probe(struct platform_device *pdev)
 	motor = 0;
 	for_each_child_of_node(node, pp) {
 		dev_info(&pdev->dev, "Motor %d:\n",motor);
+		motors[motor].speed = 0;
+		motors[motor].distance = 0;
+		motors[motor].brake = 0;
 		if(motor>=caddymotor.num_motors)
 			break;
 	  /* set up GPIOs */
@@ -405,6 +438,7 @@ static int caddymotor_probe(struct platform_device *pdev)
 			continue;
 		if (!device_create(caddymotor_class, NULL, MKDEV(MAJOR(dev),motor), NULL, "cm%d",motor))
 			continue;
+		caddymotor_init_L6228(motor);
 		motor++;
 	}		
 
