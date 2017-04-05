@@ -236,6 +236,7 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 {
 	int speed;
 	int distance;
+	int brake_command = 0;
 	char parse_buf[20];
 	char *p;
 	char *q;
@@ -254,10 +255,17 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 	p=parse_buf;
 	while(isspace(*p))
 		p++;
-	speed = simple_strtol(p,&q,0);
-	if(!q || q==p)
-		return -EINVAL;
-	p=q;
+	/* if the first non-space character is 'b', assume this is a brake command */
+	if('b'==*p) {
+		brake_command = 1;
+		/* skip */
+		p++;
+	} else {
+		speed = simple_strtol(p,&q,0);
+		if(!q || q==p)
+			return -EINVAL;
+		p=q;
+	}
 	while(isspace(*p))
 		p++;
 	/* did we find another token? */
@@ -268,10 +276,14 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		return -EINVAL;
 	if(distance<0)
 		return -EINVAL;
-		
-	pr_info("motor %d speed %d distance %d\n",motor,speed,distance);
-	motors[motor].speed = speed;
-	motors[motor].distance = distance;
+	if(brake_command) {
+		pr_info("motor %d brake %d\n",motor,distance);
+		motors[motor].brake = distance;
+	} else {
+		pr_info("motor %d speed %d distance %d\n",motor,speed,distance);
+		motors[motor].speed = speed;
+		motors[motor].distance = distance;
+	}
 	if(!timer_pending(&caddytimer))
 		mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 	return size;
