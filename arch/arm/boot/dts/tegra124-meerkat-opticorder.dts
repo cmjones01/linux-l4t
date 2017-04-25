@@ -44,6 +44,9 @@
 				nvidia,function = "pwm3";
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			};
+			dp_hpd_pff0 {
+				nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
+			};
 		};
 	};
 
@@ -113,6 +116,7 @@
 	usb@7d000000 {
 		status = "okay";
 		nvidia,port-otg;
+		nvidia,mode = <TEGRA_USB_OPMODE_DEVICE>;
 		nvidia,remote-wakeup-supported;
 		nvidia,power-off-on-suspend;
 
