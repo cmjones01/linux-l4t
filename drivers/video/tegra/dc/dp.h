@@ -261,6 +261,7 @@ struct tegra_dc_dp_data {
 
 	bool				 enabled;
 	bool				 suspended;
+	int				cur_hpd;
 
 	struct tegra_edid		*dp_edid;
 	struct completion		hpd_plug;
