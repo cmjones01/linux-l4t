@@ -43,6 +43,7 @@ static spinlock_t caddymotor_lock;
 static DECLARE_WAIT_QUEUE_HEAD(tickq);
 
 static void caddymotor_timer_callback(unsigned long arg);
+static void caddymotor_init_L6228(int motor);
 
 static struct timer_list caddytimer = TIMER_INITIALIZER(caddymotor_timer_callback, 0L, 0);
 
@@ -61,6 +62,7 @@ struct caddymotorstate_t {
 	int gpio_half_full;
 	int gpio_control;
 	/* state */
+	volatile int brake;
 	volatile int speed;
 	volatile int distance;
 };
@@ -82,83 +84,6 @@ static struct caddymotor_dev {
 
 /* class object */
 static struct class *caddymotor_class;
-
-/* SAMOSA access/parsing functions */
-
-static ssize_t read_hex(unsigned char val, struct file *file, char *buf, size_t nbytes, loff_t *ppos);
-static ssize_t read_samosa_hex(unsigned char reg, struct file *file, char *buf, size_t nbytes, loff_t *ppos);
-static ssize_t write_samosa_hex(unsigned char reg, struct file *file, const char *buffer,	size_t count, loff_t *ppos);
-
-static ssize_t read_hex(unsigned char val, struct file *file, char *buf,
-		size_t nbytes, loff_t *ppos) {
-	char outputbuf[4];
-	size_t bytes_to_write;
-	size_t written=0;
-	unsigned long unwritten;
-
-	bytes_to_write = (nbytes>3)?3:nbytes;
-
-	printk(KERN_WARNING "read_hex nbytes %d ppos %d bytes_to_write %d\n",nbytes,ppos,bytes_to_write);
-	if(!bytes_to_write)
-		return 0;
-
-	if(*ppos>0)
-		return 0;
-	sprintf(outputbuf,"%02x\n",val);
-
-	unwritten = copy_to_user(buf,outputbuf,bytes_to_write);
-	written += bytes_to_write - unwritten;
-
-	if (signal_pending(current))
-		return written ? written : -ERESTARTSYS;
-	//*ppos+=bytes_to_write;
-	cond_resched();
-
-	return written ? written : -EFAULT;
-}
-
-static ssize_t read_samosa_hex(unsigned char reg, struct file *file, char *buf,
-		size_t nbytes, loff_t *ppos) {
-	char val;
-	char outputbuf[3];
-
-	if(*ppos>0)
-		return 0;
-	//val=samosa_read8(reg);
-	val = 0;
-	sprintf(outputbuf,"%02x",val);
-
-	if(copy_to_user(buf,outputbuf,2))
-		return -EFAULT;
-	*ppos+=2;
-	return 2;
-}
-
-static ssize_t write_samosa_hex(unsigned char reg, struct file *file, const char *buffer,
-		size_t count, loff_t *ppos) {
-	unsigned long samosa_data;
-	char buf[40];
-	char *p = buf;
-	char *pp;
-
-	if (count >= (sizeof(buf) -1 ))
-		return -EFAULT;
-
-	if (copy_from_user(buf, buffer, count))
-		return -EFAULT;
-
-	buf[count] = 0;
-	while (isspace(*p))
-		p++;
-
-	samosa_data = simple_strtoul(p,&pp,0);
-	if (pp && (pp > p)) {
-		//samosa_write8(reg, samosa_data);
-	}
-	else
-		pr_info("cannot parse data from <%s> reg 0x%02x\n",p,reg);
-	return count;
-}
 
 /* file access functions */
 static ssize_t	caddymotor_read(struct file *, char *, size_t, loff_t *);
@@ -193,12 +118,6 @@ static const struct file_operations proc_caddymotor_operations = {
 
 #define PROC_CADDYMOTOR "caddymotor"
 
-static char * caddymotor_hex_to_buf(char *buf, int buflen, uint8_t addr, uint8_t val) {
-	char localbuf[6];
-	sprintf(localbuf,"%02x:%02x\n",addr,val);
-	return strcat(buf,localbuf);
-}
-
 static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 	*(devp->buffer)='\0';
 	devp->dataend=devp->buffer+strlen(devp->buffer);
@@ -208,25 +127,28 @@ static void caddymotor_read_regs(struct caddymotor_dev *devp) {
 static void caddymotor_timer_callback(unsigned long arg) {
 	int motor;
 	int continue_polling = 0;
+	struct caddymotorstate_t *m;
+	
 	for(motor = 0; motor<caddymotor.num_motors;motor++) {
+		m = &motors[motor];
 		//struct caddymotor_dev *devp = (struct caddymotor_dev *)arg;
-		if(motors[motor].speed != 0) {
-			gpio_set_value(motors[motor].gpio_en,1);
-			gpio_set_value(motors[motor].gpio_reset,1);
-			gpio_set_value(motors[motor].gpio_control,1);
-			gpio_set_value(motors[motor].gpio_dir,(motors[motor].speed<0)?0:1);
-			if(motors[motor].distance > 0) {
-				gpio_set_value(motors[motor].gpio_clk,1);
+		if(m->speed != 0) {
+			gpio_set_value(m->gpio_en,1);
+			gpio_set_value(m->gpio_reset,1);
+			gpio_set_value(m->gpio_control,1);
+			gpio_set_value(m->gpio_dir,(m->speed<0)?0:1);
+			if(m->distance > 0) {
+				gpio_set_value(m->gpio_clk,1);
 				udelay(5);
-				motors[motor].distance--;
-				gpio_set_value(motors[motor].gpio_clk,0);
+				m->distance--;
+				gpio_set_value(m->gpio_clk,0);
 				continue_polling=1;
 			} else {
-				motors[motor].speed = 0;
-				gpio_set_value(motors[motor].gpio_en,0);
+				m->speed = 0;
+				gpio_set_value(m->gpio_en,(m->brake)?1:0);
 			}
 		} else {
-			gpio_set_value(motors[motor].gpio_en,0);
+			gpio_set_value(m->gpio_en,(m->brake)?1:0);
 		}
 	}
 	if(continue_polling) {
@@ -314,6 +236,7 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 {
 	int speed;
 	int distance;
+	int brake_command = 0;
 	char parse_buf[20];
 	char *p;
 	char *q;
@@ -332,10 +255,17 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 	p=parse_buf;
 	while(isspace(*p))
 		p++;
-	speed = simple_strtol(p,&q,0);
-	if(!q || q==p)
-		return -EINVAL;
-	p=q;
+	/* if the first non-space character is 'b', assume this is a brake command */
+	if('b'==*p) {
+		brake_command = 1;
+		/* skip */
+		p++;
+	} else {
+		speed = simple_strtol(p,&q,0);
+		if(!q || q==p)
+			return -EINVAL;
+		p=q;
+	}
 	while(isspace(*p))
 		p++;
 	/* did we find another token? */
@@ -346,10 +276,14 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		return -EINVAL;
 	if(distance<0)
 		return -EINVAL;
-		
-	pr_info("motor %d speed %d distance %d\n",motor,speed,distance);
-	motors[motor].speed = speed;
-	motors[motor].distance = distance;
+	if(brake_command) {
+		pr_info("motor %d brake %d\n",motor,distance);
+		motors[motor].brake = distance;
+	} else {
+		pr_info("motor %d speed %d distance %d\n",motor,speed,distance);
+		motors[motor].speed = speed;
+		motors[motor].distance = distance;
+	}
 	if(!timer_pending(&caddytimer))
 		mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
 	return size;
@@ -432,6 +366,31 @@ static void caddymotor_del_gpio(struct platform_device *pdev, int gpio) {
 	if(gpio_is_valid(gpio))
 		gpio_free(gpio);
 }
+
+static void caddymotor_init_L6228(int motor) {
+	struct caddymotorstate_t *m = &motors[motor];
+	
+	/* put the L6228 into wave drive mode to minimise power dissipation */
+	/* take HALF/FULL high */
+	gpio_set_value(m->gpio_en,1);
+	gpio_set_value(m->gpio_half_full,1);
+	gpio_set_value(m->gpio_reset,1);
+	udelay(5);
+	/* apply reset */
+	gpio_set_value(m->gpio_reset,0);
+	udelay(5);
+	gpio_set_value(m->gpio_reset,1);
+	udelay(5);
+	/* apply one clock pulse */
+	gpio_set_value(m->gpio_clk,1);
+	udelay(5);
+	gpio_set_value(m->gpio_clk,0);
+	udelay(5);
+	/* take HALF/FULL low to ensure that L6228 is in state 2 */
+	gpio_set_value(m->gpio_half_full,0);
+	gpio_set_value(m->gpio_en,(m->brake)?1:0);
+}
+
 /* driver initialisation */
 
 //static int __init caddymotor_probe(struct platform_device *pdev)
@@ -471,6 +430,9 @@ static int caddymotor_probe(struct platform_device *pdev)
 	motor = 0;
 	for_each_child_of_node(node, pp) {
 		dev_info(&pdev->dev, "Motor %d:\n",motor);
+		motors[motor].speed = 0;
+		motors[motor].distance = 0;
+		motors[motor].brake = 0;
 		if(motor>=caddymotor.num_motors)
 			break;
 	  /* set up GPIOs */
@@ -488,6 +450,7 @@ static int caddymotor_probe(struct platform_device *pdev)
 			continue;
 		if (!device_create(caddymotor_class, NULL, MKDEV(MAJOR(dev),motor), NULL, "cm%d",motor))
 			continue;
+		caddymotor_init_L6228(motor);
 		motor++;
 	}		
 
@@ -567,11 +530,13 @@ static int __init caddymotor_init(void)
 
 	/* create the class and devices */
 	caddymotor_class = class_create(THIS_MODULE, "caddymotor");
-
+	if(!caddymotor_class)
+		goto error_region;
+		
 	/* register the device on a bus. */
 	caddymotor_device=platform_device_alloc("caddymotor",0);
 	if(!caddymotor_device)
-		goto error_bus;
+		goto error_class_device;
 	if(platform_device_add(caddymotor_device))
 		goto error_bus;
 
