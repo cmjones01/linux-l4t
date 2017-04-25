@@ -34,6 +34,7 @@
 #include "dpaux_regs.h"
 #include "dc_priv.h"
 #include "edid.h"
+#include "edp_state_machine.h"
 
 static bool tegra_dp_debug;
 module_param(tegra_dp_debug, bool, 0644);
@@ -1379,9 +1380,13 @@ static irqreturn_t tegra_dp_irq(int irq, void *ptr)
 
 	if (status & DPAUX_INTR_AUX_UNPLUG_EVENT_PENDING) {
 		dev_info(&dc->ndev->dev,"tegra_dp_irq() UNPLUG_EVENT_PENDING\n");
+		dp->cur_hpd = 0;
+		edp_state_machine_set_pending_hpd();
 	}
 	if (status & DPAUX_INTR_AUX_PLUG_EVENT_PENDING) {
 		dev_info(&dc->ndev->dev,"tegra_dp_irq() PLUG_EVENT_PENDING\n");
+		dp->cur_hpd = 1;
+		edp_state_machine_set_pending_hpd();
 		complete_all(&dp->hpd_plug);
 	}
 
@@ -1557,7 +1562,8 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 
 	dev_info(&dc->ndev->dev, "dp: tegra_dp_enable_irq(%d)\n", dp_instance->irq);
 	tegra_dp_enable_irq(dp_instance->irq);
-
+	edp_state_machine_init(dp_instance);
+	
 	dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init() complete\n");
 	return 0;
 }
@@ -1595,11 +1601,17 @@ static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
 	tegra_dp_int_en(dp, DPAUX_INTR_EN_AUX_UNPLUG_EVENT);
 
 	val = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
-	if (likely(val & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED))
+	if (likely(val & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED)) {
+		dp->cur_hpd = 1;
+		edp_state_machine_set_pending_hpd();		
 		err = 0;
+	}
 	else if (!wait_for_completion_timeout(&dp->hpd_plug,
-		msecs_to_jiffies(TEGRA_DP_HPD_PLUG_TIMEOUT_MS)))
+		msecs_to_jiffies(TEGRA_DP_HPD_PLUG_TIMEOUT_MS))) {
+		dp->cur_hpd = 0;
+		edp_state_machine_set_pending_hpd();
 		err = -ENODEV;
+	}
 
 	//tegra_dp_int_dis(dp, DPAUX_INTR_EN_AUX_PLUG_EVENT);
 
@@ -2173,7 +2185,7 @@ static void tegra_dc_dp_enable(struct tegra_dc *dc)
 
 error_enable:
 	tegra_dp_default_int(dp, false);
-	tegra_dpaux_pad_power(dp->dc, false);
+	//tegra_dpaux_pad_power(dp->dc, false);
 	//tegra_dpaux_clk_disable(dp);
 	tegra_dc_io_end(dc);
 	return;
@@ -2227,13 +2239,13 @@ static void tegra_dc_dp_disable(struct tegra_dc *dc)
 //	dev_info(&dc->ndev->dev,"dp: tegra_dp_disable_irq(%d)\n", dp->irq);
 //	tegra_dp_disable_irq(dp->irq);
 
-	tegra_dpaux_pad_power(dp->dc, false);
+//	tegra_dpaux_pad_power(dp->dc, false);
 
 	/* Power down SOR */
 	tegra_dc_sor_detach(dp->sor);
 	tegra_dc_sor_disable(dp->sor, false);
 
-	tegra_dpaux_clk_disable(dp);
+	//tegra_dpaux_clk_disable(dp);
 	tegra_dp_clk_disable(dp);
 
 	tegra_dc_io_end(dc);

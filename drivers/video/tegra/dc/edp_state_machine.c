@@ -67,12 +67,8 @@ static void edp_state_machine_sched_work_l(int resched_time)
 
 static const char * const state_names[] = {
 	"Reset",
-	"Check Plug",
-	"Check EDID",
 	"Disabled",
 	"Enabled",
-	"Wait for HPD reassert",
-	"Recheck EDID",
 	"Takeover from bootloader",
 };
 
@@ -120,7 +116,7 @@ static void edp_state_machine_handle_hpd_l(int cur_hpd)
 		tgt_state = EDP_STATE_DONE_ENABLED;
 	}
 
-	edp_state_machine_set_state_l(tgt_state, -1);
+	edp_state_machine_set_state_l(tgt_state, 0);
 }
 
 /************************************************************
@@ -134,10 +130,11 @@ static void handle_enable_l(struct tegra_dc_dp_data *edp)
 	struct fb_info *pfb = edp->dc->fb->info;
 	int blank = 1;
 
+	pr_err("%s\n",__func__);
 	event.info = pfb;
 	event.data = &blank;
 
-	tegra_dc_enable(edp->dc);
+	//tegra_dc_enable(edp->dc);
 
 	console_lock();
 	/* blank */
@@ -150,16 +147,17 @@ static void handle_enable_l(struct tegra_dc_dp_data *edp)
 
 static void edp_disable_l(struct tegra_dc_dp_data *edp)
 {
+	pr_err("%s\n",__func__);
 	if (edp->dc->enabled) {
 		pr_err("EDP from connected to disconnected\n");
 		edp->dc->connected = false;
-		tegra_dc_disable(edp->dc);
+		//tegra_dc_disable(edp->dc);
 #ifdef CONFIG_ADF_TEGRA
 		tegra_adf_process_hotplug_disconnected(edp->dc->adf);
 #else
 		tegra_fb_update_monspecs(edp->dc->fb, NULL, NULL);
 #endif
-		tegra_dc_ext_process_hotplug(edp->dc->ndev->id);
+		//tegra_dc_ext_process_hotplug(edp->dc->ndev->id);
 	}
 }
 
