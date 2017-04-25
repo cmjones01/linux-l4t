@@ -2344,9 +2344,10 @@ static bool _tegra_dc_controller_enable(struct tegra_dc *dc)
 
 	tegra_dc_unpowergate_locked(dc);
 
-	if (dc->out->enable)
+	if (dc->out->enable) {
+		dev_info(&dc->ndev->dev,"%s: out->enable\n", __func__);
 		dc->out->enable(&dc->ndev->dev);
-
+	}
 	tegra_dc_setup_clk(dc, dc->clk);
 
 	/* dc clk always on for continuous mode */
@@ -2383,9 +2384,10 @@ static bool _tegra_dc_controller_enable(struct tegra_dc *dc)
 
 	tegra_dpaux_pad_power(dc, false);
 
-	if (dc->out_ops && dc->out_ops->enable)
+	if (dc->out_ops && dc->out_ops->enable) {
+		dev_info(&dc->ndev->dev,"%s: out_ops->enable\n", __func__);
 		dc->out_ops->enable(dc);
-
+	}
 	/* force a full blending update */
 	for (i = 0; i < DC_N_WINDOWS; i++)
 		dc->blend.z[i] = -1;
@@ -2559,6 +2561,8 @@ void tegra_dc_enable(struct tegra_dc *dc)
 {
 	if (WARN_ON(!dc || !dc->out || !dc->out_ops))
 		return;
+
+	dev_info(&dc->ndev->dev,"dc: %s\n", __func__);
 
 	mutex_lock(&dc->lock);
 
@@ -3000,6 +3004,7 @@ static int tegra_dc_probe(struct platform_device *ndev)
 	int irq;
 	int i;
 
+	dev_info(&ndev->dev, "%s\n",__func__);
 	if (!np && !ndev->dev.platform_data) {
 		dev_err(&ndev->dev, "no platform data\n");
 		return -ENOENT;

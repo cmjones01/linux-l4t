@@ -1518,9 +1518,13 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 {
 	int err;
 
+	dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init()\n");
+
 	if (!dp_instance) {
-		if (tegra_dc_dp_from_of(dc))
+		if (tegra_dc_dp_from_of(dc)) {
+			dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init() deferring probe\n");
 			return -EPROBE_DEFER;
+		}
 		/* No OF, fallback on creating the device here */
 		err = tegra_dc_dp_probe(dc->ndev);
 		dev_err(&dc->ndev->dev, "dp: tegra_dc_dp_probe failed\n");
@@ -1551,6 +1555,10 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 	tegra_dc_set_edid(dc, dp_instance->dp_edid);
 	tegra_dc_set_outdata(dc, dp_instance);
 
+	dev_info(&dc->ndev->dev, "dp: tegra_dp_enable_irq(%d)\n", dp_instance->irq);
+	tegra_dp_enable_irq(dp_instance->irq);
+
+	dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init() complete\n");
 	return 0;
 }
 
@@ -2131,8 +2139,6 @@ static void tegra_dc_dp_enable(struct tegra_dc *dc)
 	tegra_dc_io_start(dc);
 	tegra_dpaux_enable(dp);
 
-	dev_info(&dc->ndev->dev,"dp: tegra_dp_enable_irq(%d)\n", dp->irq);
-	tegra_dp_enable_irq(dp->irq);
 	tegra_dp_default_int(dp, true);
 
 	tegra_dp_hpd_config(dp);
@@ -2177,6 +2183,10 @@ static void tegra_dc_dp_destroy(struct tegra_dc *dc)
 {
 	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
 
+	if(dp->irq) {
+		dev_info(&dc->ndev->dev, "dp: tegra_dp_disable_irq(%d)\n", dp->irq);
+		tegra_dp_disable_irq(dp->irq);
+	}
 	if (dp->sor)
 		tegra_dc_sor_destroy(dp->sor);
 	if (dp->dp_edid)
@@ -2214,8 +2224,8 @@ static void tegra_dc_dp_disable(struct tegra_dc *dc)
 	tegra_dc_io_start(dc);
 
 	tegra_dp_default_int(dp, false);
-	dev_info(&dc->ndev->dev,"dp: tegra_dp_disable_irq(%d)\n", dp->irq);
-	tegra_dp_disable_irq(dp->irq);
+//	dev_info(&dc->ndev->dev,"dp: tegra_dp_disable_irq(%d)\n", dp->irq);
+//	tegra_dp_disable_irq(dp->irq);
 
 	tegra_dpaux_pad_power(dp->dc, false);
 
