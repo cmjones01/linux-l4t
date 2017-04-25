@@ -2609,6 +2609,7 @@ static void _tegra_dc_controller_disable(struct tegra_dc *dc)
 	if (dc->out && dc->out->prepoweroff)
 		dc->out->prepoweroff();
 
+	dev_info(&dc->ndev->dev,"_tegra_dc_controller_disable out_ops\n");
 	if (dc->out_ops && dc->out_ops->disable)
 		dc->out_ops->disable(dc);
 
@@ -2619,6 +2620,7 @@ static void _tegra_dc_controller_disable(struct tegra_dc *dc)
 
 	tegra_dc_clear_bandwidth(dc);
 
+	dev_info(&dc->ndev->dev,"_tegra_dc_controller_disable out\n");
 	if (dc->out && dc->out->disable)
 		dc->out->disable(&dc->ndev->dev);
 

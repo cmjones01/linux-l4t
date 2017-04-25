@@ -74,6 +74,7 @@
 
 		edp {
 			status = "okay";
+			/* hotplug GPIO is implicit */
 			nvidia,ddc-i2c-bus = <&i2c2>;
 			edp_panel: panel-ch070oldl-002 {
 			};

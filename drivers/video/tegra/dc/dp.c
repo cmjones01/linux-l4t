@@ -1377,8 +1377,13 @@ static irqreturn_t tegra_dp_irq(int irq, void *ptr)
 	status = tegra_dpaux_readl(dp, DPAUX_INTR_AUX);
 	tegra_dpaux_writel(dp, DPAUX_INTR_AUX, status);
 
-	if (status & DPAUX_INTR_AUX_PLUG_EVENT_PENDING)
+	if (status & DPAUX_INTR_AUX_UNPLUG_EVENT_PENDING) {
+		dev_info(&dc->ndev->dev,"tegra_dp_irq() UNPLUG_EVENT_PENDING\n");
+	}
+	if (status & DPAUX_INTR_AUX_PLUG_EVENT_PENDING) {
+		dev_info(&dc->ndev->dev,"tegra_dp_irq() PLUG_EVENT_PENDING\n");
 		complete_all(&dp->hpd_plug);
+	}
 
 	if (status & DPAUX_INTR_AUX_TX_DONE_PENDING)
 		complete_all(&dp->aux_tx);
@@ -1462,6 +1467,7 @@ int tegra_dc_dp_probe(struct platform_device *pdev)
 			goto err_get_clk;
 		}
 	}
+	dev_info(&pdev->dev,"dp: probe() tegra_dp_disable_irq(%d)\n", irq);
 	tegra_dp_disable_irq(irq);
 
 	dp->aux_base = base;
@@ -1578,6 +1584,7 @@ static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
 
 	INIT_COMPLETION(dp->hpd_plug);
 	tegra_dp_int_en(dp, DPAUX_INTR_EN_AUX_PLUG_EVENT);
+	tegra_dp_int_en(dp, DPAUX_INTR_EN_AUX_UNPLUG_EVENT);
 
 	val = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
 	if (likely(val & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED))
@@ -1586,7 +1593,7 @@ static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
 		msecs_to_jiffies(TEGRA_DP_HPD_PLUG_TIMEOUT_MS)))
 		err = -ENODEV;
 
-	tegra_dp_int_dis(dp, DPAUX_INTR_EN_AUX_PLUG_EVENT);
+	//tegra_dp_int_dis(dp, DPAUX_INTR_EN_AUX_PLUG_EVENT);
 
 	return err;
 
@@ -2124,6 +2131,7 @@ static void tegra_dc_dp_enable(struct tegra_dc *dc)
 	tegra_dc_io_start(dc);
 	tegra_dpaux_enable(dp);
 
+	dev_info(&dc->ndev->dev,"dp: tegra_dp_enable_irq(%d)\n", dp->irq);
 	tegra_dp_enable_irq(dp->irq);
 	tegra_dp_default_int(dp, true);
 
@@ -2160,7 +2168,7 @@ static void tegra_dc_dp_enable(struct tegra_dc *dc)
 error_enable:
 	tegra_dp_default_int(dp, false);
 	tegra_dpaux_pad_power(dp->dc, false);
-	tegra_dpaux_clk_disable(dp);
+	//tegra_dpaux_clk_disable(dp);
 	tegra_dc_io_end(dc);
 	return;
 }
@@ -2195,15 +2203,18 @@ static void tegra_dc_dp_destroy(struct tegra_dc *dc)
 static void tegra_dc_dp_disable(struct tegra_dc *dc)
 {
 	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
+	dev_info(&dc->ndev->dev,"dp: tegra_dp_disable()\n");
 
-	if (!dp->enabled)
+	if (!dp->enabled) {
+		dev_info(&dc->ndev->dev,"dp: tegra_dp_disable() - not enabled, returning\n");	
 		return;
-
+	}
 	cancel_work_sync(&dp->lt_work);
 
 	tegra_dc_io_start(dc);
 
 	tegra_dp_default_int(dp, false);
+	dev_info(&dc->ndev->dev,"dp: tegra_dp_disable_irq(%d)\n", dp->irq);
 	tegra_dp_disable_irq(dp->irq);
 
 	tegra_dpaux_pad_power(dp->dc, false);
