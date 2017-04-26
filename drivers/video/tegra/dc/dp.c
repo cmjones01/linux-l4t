@@ -2260,6 +2260,26 @@ static void tegra_dc_dp_destroy(struct tegra_dc *dc)
 	kfree(dp);
 }
 
+int tegra_dc_dp_apply_monspecs(struct tegra_dc *dc,
+		struct fb_monspecs *specs)
+{
+//	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
+
+	dev_info(&dc->ndev->dev, "panel size %d by %d\n",
+			specs->max_x, specs->max_y);
+
+	/* monitors like to lie about these but they are still useful for
+	 * detecting aspect ratios
+	 */
+	dc->out->h_size = specs->max_x * 1000;
+	dc->out->v_size = specs->max_y * 1000;
+
+	dc->connected = true;
+	tegra_dc_ext_process_hotplug(dc->ndev->id);
+
+	return 0;
+}
+
 static void tegra_dc_dp_disable(struct tegra_dc *dc)
 {
 	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
@@ -2307,6 +2327,12 @@ static long tegra_dc_dp_setup_clk(struct tegra_dc *dc, struct clk *clk)
 	clk_set_rate(dp->parent_clk, 270000000);
 
 	return tegra_dc_pclk_round_rate(dc, dc->mode.pclk);
+}
+
+bool tegra_dc_dp_mode_filter(const struct tegra_dc *dc,
+					struct fb_videomode *mode)
+{
+	return true;
 }
 
 /* used by tegra_dc_probe() to detect connection(HPD) status at boot */

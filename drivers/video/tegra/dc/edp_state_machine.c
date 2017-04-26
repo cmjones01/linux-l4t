@@ -36,6 +36,22 @@
 #endif
 
 #include "edp_state_machine.h"
+/************************************************************
+ *
+ * state machine internal constants
+ *
+ ************************************************************/
+#define MAX_EDID_READ_ATTEMPTS 5
+#define EDP_EDID_MAX_LENGTH 512
+
+/* how long of an HPD drop before we consider it gone for good.
+ * this is mostly a preference to work around monitors users
+ * reported that occasionally drop HPD.
+ */
+#define HPD_STABILIZE_MS 40
+#define HPD_DROP_TIMEOUT_MS 1500
+#define CHECK_PLUG_STATE_DELAY_MS 10
+#define CHECK_EDID_DELAY_MS 60
 
 /************************************************************
  *
@@ -48,6 +64,7 @@ static struct edp_state_machine_worker_data {
 	struct tegra_dc_dp_data *edp;
 	int shutdown;
 	int state;
+	int edid_reads;
 	int pending_hpd_evt;
 } work_state;
 
@@ -67,6 +84,8 @@ static void edp_state_machine_sched_work_l(int resched_time)
 
 static const char * const state_names[] = {
 	"Reset",
+	"Check Plug",
+	"Check EDID",
 	"Disabled",
 	"Enabled",
 	"Takeover from bootloader",
@@ -100,23 +119,30 @@ static void edp_state_machine_set_state_l(int target_state, int resched_time)
 
 static void edp_state_machine_handle_hpd_l(int cur_hpd)
 {
+	int timeout;
 	int tgt_state = work_state.state;
-	pr_err("%s: cur_hpd %d\n",__func__,cur_hpd);
-	if ((EDP_STATE_DONE_ENABLED == work_state.state) && !cur_hpd) {
-		/* Did HPD drop while we were in DONE_ENABLED?  
+	
+	pr_warn("%s: cur_hpd %d\n",__func__,cur_hpd);
+	if ((EDP_STATE_DONE_ENABLED == work_state.state) && cur_hpd) {
+		/* Looks like HPD dropped but came back quickly, ignore it.
 		 */
-		tgt_state = EDP_STATE_RESET;
-	} else if(cur_hpd) {
+		pr_warn("%s: ignoring bouncing hpd\n", __func__);
+		return;
+	} else if (EDP_STATE_INIT_FROM_BOOTLOADER == work_state.state && cur_hpd) {
+		tgt_state = EDP_STATE_CHECK_PLUG_STATE;
+		timeout = HPD_STABILIZE_MS;	
+	} else {
 		/* Looks like there was HPD activity while we were neither
 		 * waiting for it to go away during steady state output, nor
 		 * looking for it to come back after such an event.  Wait until
 		 * HPD has been steady for at least 40 mSec, then restart the
 		 * state machine.
 		 */
-		tgt_state = EDP_STATE_DONE_ENABLED;
+		tgt_state = EDP_STATE_RESET;
+		timeout = HPD_STABILIZE_MS;	
 	}
 
-	edp_state_machine_set_state_l(tgt_state, 0);
+	edp_state_machine_set_state_l(tgt_state, timeout);
 }
 
 /************************************************************
@@ -134,7 +160,7 @@ static void handle_enable_l(struct tegra_dc_dp_data *edp)
 	event.info = pfb;
 	event.data = &blank;
 
-	//tegra_dc_enable(edp->dc);
+	tegra_dc_enable(edp->dc);
 
 	console_lock();
 	/* blank */
@@ -151,13 +177,13 @@ static void edp_disable_l(struct tegra_dc_dp_data *edp)
 	if (edp->dc->enabled) {
 		pr_err("EDP from connected to disconnected\n");
 		edp->dc->connected = false;
-		//tegra_dc_disable(edp->dc);
+		tegra_dc_disable(edp->dc);
 #ifdef CONFIG_ADF_TEGRA
 		tegra_adf_process_hotplug_disconnected(edp->dc->adf);
 #else
 		tegra_fb_update_monspecs(edp->dc->fb, NULL, NULL);
 #endif
-		//tegra_dc_ext_process_hotplug(edp->dc->ndev->id);
+		tegra_dc_ext_process_hotplug(edp->dc->ndev->id);
 	}
 }
 
@@ -167,12 +193,82 @@ static void handle_reset_l(struct tegra_dc_dp_data *edp)
 	 * check of the plug state in the near future.
 	 */
 	edp_disable_l(edp);
+	edp_state_machine_set_state_l(EDP_STATE_CHECK_PLUG_STATE, CHECK_PLUG_STATE_DELAY_MS);
+}
+
+static void handle_check_plug_state_l(struct tegra_dc_dp_data *dp)
+{
+	if (tegra_dc_hpd(work_state.edp->dc)) {
+		/* Looks like there is something plugged in.
+		 * Get ready to read the sink's EDID information.
+		 */
+		work_state.edid_reads = 0;
+
+		edp_state_machine_set_state_l(EDP_STATE_CHECK_EDID,
+					       CHECK_EDID_DELAY_MS);
+	} else {
+		/* nothing plugged in, so we are finished.  Go to the
+		 * DONE_DISABLED state and stay there until the next HPD event.
+		 * */
+		edp_disable_l(dp);
+		edp_state_machine_set_state_l(EDP_STATE_DONE_DISABLED, -1);
+	}
+}
+
+static void handle_check_edid_l(struct tegra_dc_dp_data *dp)
+{
+	struct fb_monspecs specs;
+
+	memset(&specs, 0, sizeof(specs));
+
+	if (!tegra_dc_hpd(work_state.edp->dc)) {
+		/* hpd dropped - stop EDID read */
+		pr_info("hpd == 0, aborting EDID read\n");
+		goto end_disabled;
+	}
+
+	if (tegra_edid_get_monspecs(dp->dp_edid, &specs)) {
+		/* Failed to read EDID.  If we still have retry attempts left,
+		 * schedule another attempt.  Otherwise give up and just go to
+		 * the disabled state.
+		 */
+		work_state.edid_reads++;
+		if (work_state.edid_reads >= MAX_EDID_READ_ATTEMPTS) {
+			pr_info("Failed to read EDID after %d times. Giving up.\n",
+				work_state.edid_reads);
+			goto end_disabled;
+		} else {
+			edp_state_machine_set_state_l(EDP_STATE_CHECK_EDID,
+						       CHECK_EDID_DELAY_MS);
+		}
+
+		return;
+	}
+
+#ifdef CONFIG_ADF_TEGRA
+	tegra_adf_process_hotplug_connected(dp->dc->adf, &specs);
+#else
+	tegra_fb_update_monspecs(dp->dc->fb, &specs,
+		tegra_dc_dp_mode_filter);
+#endif
+
+	if (tegra_dc_dp_apply_monspecs(dp->dc, &specs))
+		goto end_disabled;
+
+	edp_state_machine_set_state_l(EDP_STATE_DONE_ENABLED, 0);
+
+	return;
+
+end_disabled:
+	edp_disable_l(dp);
 	edp_state_machine_set_state_l(EDP_STATE_DONE_DISABLED, -1);
 }
 
 typedef void (*dispatch_func_t)(struct tegra_dc_dp_data *edp);
 static const dispatch_func_t state_machine_dispatch[] = {
 	handle_reset_l,			/* STATE_RESET */
+	handle_check_plug_state_l,	/* STATE_CHECK_PLUG_STATE */
+	handle_check_edid_l,		/* STATE_CHECK_EDID */
 	NULL,				/* STATE_DONE_DISABLED */
 	handle_enable_l,		/* STATE_DONE_ENABLED */
 	NULL,				/* STATE_INIT_FROM_BOOTLOADER */
@@ -235,6 +331,7 @@ void edp_state_machine_init(struct tegra_dc_dp_data *edp)
 	work_state.edp = edp;
 	work_state.state = EDP_STATE_INIT_FROM_BOOTLOADER;
 	work_state.pending_hpd_evt = 1;
+	work_state.edid_reads = 0;
 	work_state.shutdown = 0;
 	INIT_DELAYED_WORK(&work_state.dwork, edp_state_machine_worker);
 }

@@ -33,6 +33,22 @@ enum {
 	 */
 	EDP_STATE_RESET = 0,
 
+	/* After the debounce delay, check the status of the HPD line.  If its
+	 * low, then the cable is unplugged and we go directly to DONE_DISABLED.
+	 * If it is high, then the cable is plugged and we proceed to CHECK_EDID
+	 * in order to read the EDID and figure out the next step.
+	 */
+	EDP_STATE_CHECK_PLUG_STATE,
+
+	/* CHECK_EDID is the state we stay in attempting to read the EDID
+	 * information after we check the plug state and discover that we are
+	 * plugged in.  If we max out our retries and fail to read the EDID, we
+	 * move to DONE_DISABLED.  If we successfully read the EDID, we move on
+	 * to DONE_ENABLE, set an initial video mode, then signal to the high
+	 * level that we are ready for final mode selection.
+	 */
+	EDP_STATE_CHECK_EDID,
+
 	/* DONE_DISABLED is the state we stay in after being reset and either
 	 * discovering that no cable is plugged in or after we think a cable is
 	 * plugged in but fail to read EDID.

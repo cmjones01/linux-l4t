@@ -19,6 +19,7 @@
 
 #include <linux/clk.h>
 #include <linux/delay.h>
+#include "edid.h"
 #include "sor.h"
 #include "dc_priv.h"
 #include "dpaux_regs.h"
@@ -442,5 +443,8 @@ void tegra_dpaux_pad_power(struct tegra_dc *dc, bool on)
 	tegra_dc_io_end(dc);
 	clk_disable_unprepare(clk);
 }
-
+bool tegra_dc_dp_mode_filter(const struct tegra_dc *dc,
+			       struct fb_videomode *mode);
+int tegra_dc_dp_apply_monspecs(struct tegra_dc *dc,
+		struct fb_monspecs *specs);
 #endif
