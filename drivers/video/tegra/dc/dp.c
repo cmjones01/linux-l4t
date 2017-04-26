@@ -605,6 +605,8 @@ static int tegra_dc_dp_i2c_xfer(struct tegra_dc *dc, struct i2c_msg *msgs,
 	u32 start_addr;
 	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
 
+	dev_info(&dc->ndev->dev,"%s: num %d\n",__func__,num);
+	
 	for (i = 0; i < num; ++i) {
 		pmsg = &msgs[i];
 

@@ -204,8 +204,7 @@ static void handle_check_plug_state_l(struct tegra_dc_dp_data *dp)
 		 */
 		work_state.edid_reads = 0;
 
-		edp_state_machine_set_state_l(EDP_STATE_CHECK_EDID,
-					       CHECK_EDID_DELAY_MS);
+		edp_state_machine_set_state_l(EDP_STATE_DONE_ENABLED,0);
 	} else {
 		/* nothing plugged in, so we are finished.  Go to the
 		 * DONE_DISABLED state and stay there until the next HPD event.
