@@ -2348,7 +2348,18 @@ bool tegra_dc_dp_mode_filter(const struct tegra_dc *dc,
 }
 
 /* used by tegra_dc_probe() to detect connection(HPD) status at boot */
-static bool tegra_dc_dp_detect(struct tegra_dc *dc)
+static bool tegra_dc_dp_detect(struct tegra_dc *dc) {
+	bool result = (tegra_dc_hpd(dc))?true:false;
+
+	dev_info(&dc->ndev->dev,
+		"dp: %s HPD:%splugged\n",
+		__func__, (result) ? "" : "un");
+	edp_state_machine_set_pending_hpd();
+	
+	return result;
+}
+
+/*static bool tegra_dc_dp_detect(struct tegra_dc *dc)
 {
 	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
 	u32 rd;
@@ -2363,7 +2374,7 @@ static bool tegra_dc_dp_detect(struct tegra_dc *dc)
 		rd, (DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED & rd) ? "" : "un");
 	return (DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED & rd) ? true : false;
 }
-
+*/
 
 static void tegra_dc_dp_modeset_notifier(struct tegra_dc *dc)
 {
