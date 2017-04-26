@@ -53,6 +53,7 @@ static bool tegra_dp_channel_eq_status(struct tegra_dc_dp_data *dp);
 static void tegra_dp_set_tx_pu(struct tegra_dc_dp_data *dp,
 				u32 pe[4], u32 vs[4], u32 pc[4]);
 static int tegra_dp_full_lt(struct tegra_dc_dp_data *dp);
+static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp);
 
 /* Global pointer to link back the private API to the driver model */
 static struct tegra_dc_dp_data *dp_instance;
@@ -258,8 +259,9 @@ static int tegra_dc_dpaux_write_chunk_locked(struct tegra_dc_dp_data *dp,
 	}
 
 	if (tegra_platform_is_silicon()) {
-		*aux_stat = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
-		if (!(*aux_stat & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED)) {
+		//*aux_stat = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
+		//if (!(*aux_stat & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED)) {
+		if (tegra_dp_hpd_plug(dp)) {
 			dev_err(&dp->dc->ndev->dev, "dp: HPD is not detected\n");
 			return -EFAULT;
 		}
@@ -404,8 +406,9 @@ static int tegra_dc_dpaux_read_chunk_locked(struct tegra_dc_dp_data *dp,
 	}
 
 	if (tegra_platform_is_silicon()) {
-		*aux_stat = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
-		if (!(*aux_stat & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED)) {
+//		*aux_stat = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
+//		if (!(*aux_stat & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED)) {
+		if (tegra_dp_hpd_plug(dp)) {
 			dev_err(&dp->dc->ndev->dev, "dp: HPD is not detected\n");
 			return -EFAULT;
 		}
@@ -1564,6 +1567,8 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 
 	dp_instance->dc = dc;
 	dp_instance->mode = &dc->mode;
+	dev_info(&dc->ndev->dev,"%s: pclk %d %dx%d\n",__func__,dp_instance->mode->pclk,dp_instance->mode->h_active,dp_instance->mode->v_active);
+	dev_info(&dc->ndev->dev,"%s: out pclk %d %dx%d\n",__func__,dc->out->modes->pclk,dc->out->modes->h_active,dc->out->modes->v_active);
 	dp_instance->pdata = dc->pdata->default_out->dp_out;
 	rt_mutex_init(&dp_instance->suspend_lock);
 

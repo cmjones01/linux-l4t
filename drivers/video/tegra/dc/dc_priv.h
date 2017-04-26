@@ -459,4 +459,5 @@ int tegra_dc_cursor_set(struct tegra_dc *dc, bool enable, int x, int y);
 int tegra_dc_cursor_clip(struct tegra_dc *dc, unsigned clip);
 int tegra_dc_cursor_suspend(struct tegra_dc *dc);
 int tegra_dc_cursor_resume(struct tegra_dc *dc);
+
 #endif
