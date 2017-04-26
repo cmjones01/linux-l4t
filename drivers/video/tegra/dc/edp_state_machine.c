@@ -161,18 +161,12 @@ static void handle_enable_l(struct tegra_dc_dp_data *edp)
 	event.info = pfb;
 	event.data = &blank;
 
-	pr_warn("%s: pclk %d %dx%d\n",__func__,edp->dc->mode.pclk,edp->dc->mode.h_active,edp->dc->mode.v_active);
-	pr_warn("%s: out pclk %d %dx%d\n",__func__,edp->dc->out->modes->pclk,edp->dc->out->modes->h_active,edp->dc->out->modes->v_active);
-	//tegra_dc_program_mode(edp->dc, edp->dc->out->modes);
-	//edp->dc->mode->pclk = edp->dc->out->modes->pclk;
+//	pr_warn("%s: out pclk %d %dx%d\n",__func__,edp->dc->out->modes->pclk,edp->dc->out->modes->h_active,edp->dc->out->modes->v_active);
 	edp->dc->mode = *edp->dc->out->modes;
 	tegra_dc_enable(edp->dc);
-//	tegra_dc_restore(edp->dc);
 	win = &edp->dc->fb->win;
 	tegra_dc_update_windows(&win, 1, NULL);
 	tegra_dc_sync_windows(&win, 1);	
-//	tegra_dc_program_bandwidth(edp->dc, true);
-//	edp->dc->blanked = false;
 	console_lock();
 	/* blank */
 	fb_notifier_call_chain(FB_EVENT_BLANK, &event);

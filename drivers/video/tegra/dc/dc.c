@@ -2535,15 +2535,12 @@ int tegra_dc_set_default_videomode(struct tegra_dc *dc)
 
 static bool _tegra_dc_enable(struct tegra_dc *dc)
 {
-	dev_info(&dc->ndev->dev,"%s: pclk\n",__func__);
 	if (dc->mode.pclk == 0)
 		return false;
 
-	dev_info(&dc->ndev->dev,"%s: out\n",__func__);
 	if (!dc->out)
 		return false;
 
-	dev_info(&dc->ndev->dev,"%s: enabled %d\n",__func__,dc->enabled);
 	if (dc->enabled)
 		return true;
 

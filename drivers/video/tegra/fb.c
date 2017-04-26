@@ -284,14 +284,13 @@ static int tegra_fb_blank(int blank, struct fb_info *info)
 	case FB_BLANK_UNBLANK:
 		dev_dbg(&tegra_fb->ndev->dev, "unblank\n");
 		tegra_dc_enable(dc);
-		//if (!dc->suspended && dc->blanked &&
-		//    !tegra_dc_restore(dc)) {
+		if (!dc->suspended && dc->blanked &&
+		    !tegra_dc_restore(dc)) {
 			struct tegra_dc_win *win = &tegra_fb->win;
-			//tegra_dc_restore(dc);
 			tegra_dc_update_windows(&win, 1, NULL);
 			tegra_dc_sync_windows(&win, 1);
-			//tegra_dc_program_bandwidth(dc, true);
-		//}
+			tegra_dc_program_bandwidth(dc, true);
+		}
 
 		dc->blanked = false;
 		return 0;
