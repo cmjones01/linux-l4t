@@ -74,7 +74,11 @@
 
 		edp {
 			status = "okay";
-			/* hotplug GPIO is implicit */
+			/* GPIO used for hotplug detection
+			 * WARNING: the flags given here are ignored.
+			 * hdmi-display/disp-default-out/nvidia,out-flags
+			 * must be used instead */
+			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(FF, 0) GPIO_ACTIVE_HIGH>;
 			nvidia,ddc-i2c-bus = <&i2c2>;
 			edp_panel: panel-ch070oldl-002 {
 			};

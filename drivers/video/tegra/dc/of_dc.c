@@ -1780,9 +1780,10 @@ struct tegra_dc_platform_data
 		}
 	}
 
-	if (pdata->default_out->type == TEGRA_DC_OUT_HDMI) {
+	if (pdata->default_out->type == TEGRA_DC_OUT_HDMI || pdata->default_out->type == TEGRA_DC_OUT_DP) {
 		int hotplug_gpio = of_get_named_gpio_flags(
 			np_out, "nvidia,hpd-gpio", 0, &flags);
+		dev_info(&ndev->dev,"HPD GPIO %d\n",hotplug_gpio);
 		if (gpio_is_valid(hotplug_gpio))
 			pdata->default_out->hotplug_gpio = hotplug_gpio;
 
