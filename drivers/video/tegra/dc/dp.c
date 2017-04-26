@@ -1606,7 +1606,7 @@ err_edid_destroy:
 	return err;
 }
 
-static void tegra_dp_hpd_config(struct tegra_dc_dp_data *dp)
+/*static void tegra_dp_hpd_config(struct tegra_dc_dp_data *dp)
 {
 #define TEGRA_DP_HPD_UNPLUG_MIN_US	2000
 #define TEGRA_DP_HPD_PLUG_MIN_US	250
@@ -1624,9 +1624,19 @@ static void tegra_dp_hpd_config(struct tegra_dc_dp_data *dp)
 #undef TEGRA_DP_HPD_IRQ_MIN_US
 #undef TEGRA_DP_HPD_PLUG_MIN_US
 #undef TEGRA_DP_HPD_UNPLUG_MIN_US
+}*/
+
+static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp) {
+	int err;
+	if(tegra_dc_hpd(dp->dc)) {
+		err = 0;
+	} else {
+		err = -ENODEV;
+	}
+	return err;
 }
 
-static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
+/*static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
 {
 #define TEGRA_DP_HPD_PLUG_TIMEOUT_MS	500
 	u32 val;
@@ -1656,7 +1666,7 @@ static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
 
 #undef TEGRA_DP_HPD_PLUG_TIMEOUT_MS
 }
-
+*/
 static void tegra_dp_set_tx_pu(struct tegra_dc_dp_data *dp, u32 pe[4],
 				u32 vs[4], u32 pc[4])
 {
@@ -2190,7 +2200,7 @@ static void tegra_dc_dp_enable(struct tegra_dc *dc)
 
 	tegra_dp_default_int(dp, true);
 
-	tegra_dp_hpd_config(dp);
+/*	tegra_dp_hpd_config(dp); */
 	if (tegra_dp_hpd_plug(dp) < 0) {
 		dev_info(&dc->ndev->dev, "dp: no panel/monitor plugged\n");
 		goto error_enable;

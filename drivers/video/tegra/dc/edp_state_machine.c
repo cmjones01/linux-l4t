@@ -295,7 +295,7 @@ static void edp_state_machine_worker(struct work_struct *work)
 	pending_hpd_evt = work_state.pending_hpd_evt;
 	work_state.pending_hpd_evt = 0;
 	rt_mutex_unlock(&work_lock);
-	cur_hpd = work_state.edp->cur_hpd;
+	cur_hpd = tegra_dc_hpd(work_state.edp->dc);
 	
 	pr_err("%s (tid %p): state %d (%s), hpd %d, pending_hpd_evt %d\n",
 		__func__, current, work_state.state,
