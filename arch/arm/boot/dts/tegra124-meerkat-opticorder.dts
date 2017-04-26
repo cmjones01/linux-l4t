@@ -80,7 +80,6 @@
 			 * hdmi-display/disp-default-out/nvidia,out-flags
 			 * must be used instead */
 			nvidia,hpd-gpio = <&gpio TEGRA_GPIO(FF, 0) GPIO_ACTIVE_HIGH>;
-			nvidia,ddc-i2c-bus = <&i2c2>;
 			edp_panel: panel-ch070oldl-002 {
 			};
 		};
@@ -191,19 +190,12 @@
 	i2c@7000c400 {
 		status = "okay";
 
-		lvds-bridge@20 {
+		ptn3460@20 {
 			compatible = "nxp,ptn3460";
 			reg = <0x20>;
 			powerdown-gpio = <TEGRA_GPIO(U, 1)>;
 			reset-gpio = <TEGRA_GPIO(H, 1)>;
 			edid-emulation = <5>;
-			ports {
-				port@0 {
-					bridge_out: endpoint {
-						remote-endpoint = <&edp_panel>;
-					};
-				};
-			};
 		};
 	};
 	
