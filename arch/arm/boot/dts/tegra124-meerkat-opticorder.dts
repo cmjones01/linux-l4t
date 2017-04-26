@@ -45,6 +45,7 @@
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 			};
 			dp_hpd_pff0 {
+				nvidia,function = "safe";
 				nvidia,pull = <TEGRA_PIN_PULL_DOWN>;
 			};
 		};

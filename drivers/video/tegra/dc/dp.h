@@ -252,6 +252,7 @@ struct tegra_dc_dp_data {
 
 	struct work_struct		lt_work;
 	struct mutex		lt_lock;
+	struct rt_mutex			suspend_lock;
 
 	u8				 revision;
 

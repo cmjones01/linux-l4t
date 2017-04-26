@@ -1363,6 +1363,20 @@ static void tegra_dp_lt_worker(struct work_struct *work)
 	tegra_dc_io_end(dp->dc);
 }
 
+static irqreturn_t tegra_dc_dp_hpd_irq(int irq, void *ptr)
+{
+	struct tegra_dc *dc = ptr;
+	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
+
+	pr_info("%s: start\n", __func__);
+	rt_mutex_lock(&dp->suspend_lock);
+	if (!dp->suspended)
+		edp_state_machine_set_pending_hpd();
+	rt_mutex_unlock(&dp->suspend_lock);
+	pr_info("%s: end\n", __func__);
+	return IRQ_HANDLED;
+}
+
 static irqreturn_t tegra_dp_irq(int irq, void *ptr)
 {
 	struct tegra_dc_dp_data *dp = ptr;
@@ -1378,15 +1392,8 @@ static irqreturn_t tegra_dp_irq(int irq, void *ptr)
 	status = tegra_dpaux_readl(dp, DPAUX_INTR_AUX);
 	tegra_dpaux_writel(dp, DPAUX_INTR_AUX, status);
 
-	if (status & DPAUX_INTR_AUX_UNPLUG_EVENT_PENDING) {
-		dev_info(&dc->ndev->dev,"tegra_dp_irq() UNPLUG_EVENT_PENDING\n");
-		dp->cur_hpd = 0;
-		edp_state_machine_set_pending_hpd();
-	}
 	if (status & DPAUX_INTR_AUX_PLUG_EVENT_PENDING) {
 		dev_info(&dc->ndev->dev,"tegra_dp_irq() PLUG_EVENT_PENDING\n");
-		dp->cur_hpd = 1;
-		edp_state_machine_set_pending_hpd();
 		complete_all(&dp->hpd_plug);
 	}
 
@@ -1521,7 +1528,7 @@ static bool tegra_dc_dp_from_of(struct tegra_dc *dc)
 
 static int tegra_dc_dp_init(struct tegra_dc *dc)
 {
-	int err;
+	int err,ret;
 
 	dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init()\n");
 
@@ -1556,16 +1563,45 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 	dp_instance->dc = dc;
 	dp_instance->mode = &dc->mode;
 	dp_instance->pdata = dc->pdata->default_out->dp_out;
+	rt_mutex_init(&dp_instance->suspend_lock);
 
 	tegra_dc_set_edid(dc, dp_instance->dp_edid);
 	tegra_dc_set_outdata(dc, dp_instance);
 
 	dev_info(&dc->ndev->dev, "dp: tegra_dp_enable_irq(%d)\n", dp_instance->irq);
 	tegra_dp_enable_irq(dp_instance->irq);
+	
+	
+	err = gpio_request(dc->out->hotplug_gpio, "dp_hpd");
+	if (err < 0) {
+		dev_err(&dc->ndev->dev, "dp: hpd gpio_request failed\n");
+		goto err_edid_destroy;
+	}
+
+	gpio_direction_input(dc->out->hotplug_gpio);
+
+	/* TODO: support non-hotplug */
+	ret = request_threaded_irq(gpio_to_irq(dc->out->hotplug_gpio),
+		NULL, tegra_dc_dp_hpd_irq,
+		IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+		dev_name(&dc->ndev->dev), dc);
+
+	if (ret) {
+		dev_err(&dc->ndev->dev, "dp: request_irq %d failed - %d\n",
+			gpio_to_irq(dc->out->hotplug_gpio), ret);
+		err = -EBUSY;
+		goto err_gpio_free;
+	}
+	
 	edp_state_machine_init(dp_instance);
 	
 	dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init() complete\n");
 	return 0;
+err_gpio_free:
+	gpio_free(dc->out->hotplug_gpio);
+err_edid_destroy:
+	tegra_edid_destroy(dp_instance->dp_edid);
+	return err;
 }
 
 static void tegra_dp_hpd_config(struct tegra_dc_dp_data *dp)
@@ -1598,7 +1634,6 @@ static int tegra_dp_hpd_plug(struct tegra_dc_dp_data *dp)
 
 	INIT_COMPLETION(dp->hpd_plug);
 	tegra_dp_int_en(dp, DPAUX_INTR_EN_AUX_PLUG_EVENT);
-	tegra_dp_int_en(dp, DPAUX_INTR_EN_AUX_UNPLUG_EVENT);
 
 	val = tegra_dpaux_readl(dp, DPAUX_DP_AUXSTAT);
 	if (likely(val & DPAUX_DP_AUXSTAT_HPD_STATUS_PLUGGED)) {
@@ -2195,6 +2230,9 @@ static void tegra_dc_dp_destroy(struct tegra_dc *dc)
 {
 	struct tegra_dc_dp_data *dp = tegra_dc_get_outdata(dc);
 
+	free_irq(gpio_to_irq(dc->out->hotplug_gpio), dc);
+	edp_state_machine_shutdown();
+	
 	if(dp->irq) {
 		dev_info(&dc->ndev->dev, "dp: tegra_dp_disable_irq(%d)\n", dp->irq);
 		tegra_dp_disable_irq(dp->irq);

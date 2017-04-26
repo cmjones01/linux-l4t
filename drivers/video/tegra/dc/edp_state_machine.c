@@ -101,7 +101,7 @@ static void edp_state_machine_set_state_l(int target_state, int resched_time)
 static void edp_state_machine_handle_hpd_l(int cur_hpd)
 {
 	int tgt_state = work_state.state;
-
+	pr_err("%s: cur_hpd %d\n",__func__,cur_hpd);
 	if ((EDP_STATE_DONE_ENABLED == work_state.state) && !cur_hpd) {
 		/* Did HPD drop while we were in DONE_ENABLED?  
 		 */
