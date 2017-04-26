@@ -76,6 +76,7 @@ enum {
 };
 
 void edp_state_machine_init(struct tegra_dc_dp_data *edp);
+void edp_state_machine_reset(void);
 void edp_state_machine_shutdown(void);
 void edp_state_machine_set_pending_hpd(void);
 int edp_state_machine_get_state(void);

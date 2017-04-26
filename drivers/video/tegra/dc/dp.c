@@ -1332,6 +1332,8 @@ static int tegra_dp_lt(struct tegra_dc_dp_data *dp)
 			dev_err(&dp->dc->ndev->dev,
 				"dp: fast lt failed, trying full lt\n");
 			goto try_full_lt;
+		} else {
+			dp->startup_retries = 0;
 		}
 	}
 
@@ -1339,10 +1341,22 @@ try_full_lt:
 	if (ret) {
 		tegra_dp_restore_link_config(dp, &dp->max_link_cfg);
 		ret = tegra_dp_full_lt(dp);
-		if (ret < 0)
-			dev_err(&dp->dc->ndev->dev, "dp: full lt failed.\n");
+		if (ret < 0) {
+			dev_err(&dp->dc->ndev->dev, "dp: full lt failed\n");
+			dp->startup_retries++;
+			if(dp->startup_retries<LT_STARTUP_RETRIES_MAX) {
+				dev_err(&dp->dc->ndev->dev, "dp: retrying %d of %d\n",dp->startup_retries,LT_STARTUP_RETRIES_MAX);
+				edp_state_machine_reset();
+				edp_state_machine_set_pending_hpd();
+			} else {
+				dev_err(&dp->dc->ndev->dev, "dp: giving up\n");
+			}
+		} else {
+			dp->startup_retries = 0;
+		}
 	}
 lt_success:
+	
 	mutex_unlock(&dp->lt_lock);
 	return ret;
 }
@@ -1600,6 +1614,7 @@ static int tegra_dc_dp_init(struct tegra_dc *dc)
 		goto err_gpio_free;
 	}
 	
+	dp_instance->startup_retries = 0;
 	edp_state_machine_init(dp_instance);
 	
 	dev_info(&dc->ndev->dev, "dp: tegra_dc_dp_init() complete\n");

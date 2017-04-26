@@ -26,6 +26,9 @@
 
 #include "../../../../arch/arm/mach-tegra/iomap.h"
 
+// try link training 5 times before giving up.
+#define LT_STARTUP_RETRIES_MAX 5
+
 #define DP_AUX_DEFER_MAX_TRIES		7
 #define DP_AUX_TIMEOUT_MAX_TRIES	2
 #define DP_POWER_ON_MAX_TRIES		3
@@ -263,7 +266,8 @@ struct tegra_dc_dp_data {
 
 	bool				 enabled;
 	bool				 suspended;
-
+	int startup_retries;
+	
 	struct tegra_edid		*dp_edid;
 	struct completion		hpd_plug;
 	struct completion		aux_tx;

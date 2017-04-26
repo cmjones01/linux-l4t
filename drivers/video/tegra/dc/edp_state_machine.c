@@ -370,3 +370,9 @@ int edp_state_machine_get_state(void)
 
 	return ret;
 }
+
+void edp_state_machine_reset(void) {
+	rt_mutex_lock(&work_lock);
+	work_state.state = EDP_STATE_RESET;
+	rt_mutex_unlock(&work_lock);
+}
