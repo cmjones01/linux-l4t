@@ -186,7 +186,7 @@ static void edp_disable_l(struct tegra_dc_dp_data *edp)
 #ifdef CONFIG_ADF_TEGRA
 		tegra_adf_process_hotplug_disconnected(edp->dc->adf);
 #else
-		tegra_fb_update_monspecs(edp->dc->fb, NULL, NULL);
+		//tegra_fb_update_monspecs(edp->dc->fb, NULL, NULL);
 #endif
 		tegra_dc_ext_process_hotplug(edp->dc->ndev->id);
 	}
