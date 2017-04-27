@@ -444,9 +444,9 @@ static void caddymotor_init_L6228(int motor) {
 			udelay(5);
 			/* take HALF/FULL low to ensure that L6228 is in state 2 */
 			gpio_set_value(m->gpio_half_full,0);
-			gpio_set_value(m->gpio_en,(m->brake)?1:0);
 			break;
 	}
+	gpio_set_value(m->gpio_en,(m->brake)?1:0);
 }
 
 /* driver initialisation */
