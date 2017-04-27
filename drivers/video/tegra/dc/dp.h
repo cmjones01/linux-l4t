@@ -26,8 +26,8 @@
 
 #include "../../../../arch/arm/mach-tegra/iomap.h"
 
-// try link training 5 times before giving up.
-#define LT_STARTUP_RETRIES_MAX 5
+// try link training this many times before giving up.
+#define LT_STARTUP_RETRIES_MAX 10
 
 #define DP_AUX_DEFER_MAX_TRIES		7
 #define DP_AUX_TIMEOUT_MAX_TRIES	2
