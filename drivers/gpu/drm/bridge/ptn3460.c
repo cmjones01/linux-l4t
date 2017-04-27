@@ -105,13 +105,17 @@ static void ptn3460_enable(struct ptn3460_bridge *ptn_bridge)
 	if (ptn_bridge->enabled)
 		return;
 
-	if (gpio_is_valid(ptn_bridge->gpio_pd_n))
+	if (gpio_is_valid(ptn_bridge->gpio_pd_n)) {
 		gpio_set_value(ptn_bridge->gpio_pd_n, 1);
-
+	} else {
+		dev_warn(&ptn_bridge->client->dev,"%s: invalid gpio_pd_n %d\n",__func__,ptn_bridge->gpio_pd_n);
+	}
 	if (gpio_is_valid(ptn_bridge->gpio_rst_n)) {
 		gpio_set_value(ptn_bridge->gpio_rst_n, 0);
 		udelay(10);
 		gpio_set_value(ptn_bridge->gpio_rst_n, 1);
+	} else {
+		dev_warn(&ptn_bridge->client->dev,"%s: invalid gpio_rst_n %d\n",__func__,ptn_bridge->gpio_rst_n);
 	}
 
 	/*
@@ -171,21 +175,24 @@ int ptn3460_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		return -ENOMEM;
 	}
 	ptn_bridge->client = client;
+	ptn_bridge->enabled = false;
 	i2c_set_clientdata(client,ptn_bridge);
 	
 	node = client->dev.of_node;
 
 	ptn_bridge->gpio_pd_n = of_get_named_gpio(node, "powerdown-gpio", 0);
+	dev_info(&client->dev,"%s powerdown-gpio %d\n",__func__,ptn_bridge->gpio_pd_n);
 	if (gpio_is_valid(ptn_bridge->gpio_pd_n)) {
 		ret = gpio_request_one(ptn_bridge->gpio_pd_n,
 				GPIOF_OUT_INIT_HIGH, "PTN3460_PD_N");
 		if (ret) {
 			dev_err(&client->dev,"Request powerdown-gpio failed (%d)\n", ret);
-			return ret;
+		 goto err;
 		}
 	}
 
 	ptn_bridge->gpio_rst_n = of_get_named_gpio(node, "reset-gpio", 0);
+	dev_info(&client->dev,"%s reset-gpio %d\n",__func__,ptn_bridge->gpio_rst_n);
 	if (gpio_is_valid(ptn_bridge->gpio_rst_n)) {
 		/*
 		 * Request the reset pin low to avoid the bridge being
@@ -196,7 +203,7 @@ int ptn3460_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		if (ret) {
 			dev_err(&client->dev,"Request reset-gpio failed (%d)\n", ret);
 			gpio_free(ptn_bridge->gpio_pd_n);
-			return ret;
+			goto err_pd;
 		}
 	}
 
@@ -204,7 +211,7 @@ int ptn3460_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			&ptn_bridge->edid_emulation);
 	if (ret) {
 		dev_err(&client->dev,"Can't read edid emulation value\n");
-		goto err;
+		goto err_rst;
 	}
 
 	ptn3460_enable(ptn_bridge);
@@ -212,11 +219,13 @@ int ptn3460_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	dev_info(&client->dev,"%s completed OK\n",__func__);
 	return 0;
 
-err:
-	if (gpio_is_valid(ptn_bridge->gpio_pd_n))
-		gpio_free(ptn_bridge->gpio_pd_n);
+err_rst:
 	if (gpio_is_valid(ptn_bridge->gpio_rst_n))
 		gpio_free(ptn_bridge->gpio_rst_n);
+err_pd:
+	if (gpio_is_valid(ptn_bridge->gpio_pd_n))
+		gpio_free(ptn_bridge->gpio_pd_n);
+err:
 	dev_err(&client->dev,"%s failed\n",__func__);
 	return ret;
 }

@@ -193,8 +193,8 @@
 		ptn3460@20 {
 			compatible = "nxp,ptn3460";
 			reg = <0x20>;
-			powerdown-gpio = <TEGRA_GPIO(U, 1)>;
-			reset-gpio = <TEGRA_GPIO(H, 1)>;
+			powerdown-gpio = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
+			reset-gpio = <&gpio TEGRA_GPIO(H, 1) GPIO_ACTIVE_HIGH>;
 			edid-emulation = <5>;
 		};
 	};
@@ -261,7 +261,7 @@
 	sdhci@700b0000 {
 		status = "okay";
 		cd-gpios = <&gpio TEGRA_GPIO(EE, 2) GPIO_ACTIVE_LOW>;
-		vddio_sd_slot-supply = <&sdmmc1_3v3>;
+		vddio_sd_slot-supply = <&ext_3v3>;
 	};
 
 	/* MMC card slot */
@@ -379,18 +379,6 @@
 			regulator-max-microvolt = <3300000>;
 			regulator-enable-ramp-delay = <30000>;
 			gpio = <&gpio TEGRA_GPIO(R, 0) GPIO_ACTIVE_HIGH>;
-			enable-active-high;
-			vin-supply = <&ext_3v3>;
-		};
-
-		sdmmc1_3v3: regulator@110 {
-			compatible = "regulator-fixed";
-			reg = <110>;
-			regulator-name = "+3V3_SDMMC1";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			regulator-enable-ramp-delay = <30000>;
-			gpio = <&gpio TEGRA_GPIO(U, 1) GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			vin-supply = <&ext_3v3>;
 		};
