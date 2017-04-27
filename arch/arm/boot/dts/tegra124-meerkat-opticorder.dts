@@ -2,7 +2,7 @@
 
 #include "tegra124-meerkat.dtsi"
 #include "panel-ch070oldl-002.dtsi"
-
+#include <dt-bindings/gpio/caddymotor.h>
 / {
 	model = "Avionic Design Meerkat Evalboard";
 	compatible = "ad,meerkat-evalboard", "ad,meerkat", "nvidia,tegra124";
@@ -456,7 +456,7 @@
 	
 	caddymotor {
 		compatible = "cerebriam,caddymotor";
-		
+		/* up/down, pitch */
 		motor@0 {
 			gpio-clk = <&gpio TEGRA_GPIO(H,3) GPIO_ACTIVE_HIGH>;
 			gpio-en = <&gpio TEGRA_GPIO(H,5) GPIO_ACTIVE_HIGH>;
@@ -464,7 +464,10 @@
 			gpio-reset = <&gpio TEGRA_GPIO(I,2) GPIO_ACTIVE_HIGH>;
 			gpio-half-full = <&gpio TEGRA_GPIO(I,5) GPIO_ACTIVE_HIGH>;
 			gpio-control = <&gpio TEGRA_GPIO(I,7) GPIO_ACTIVE_HIGH>;
+			default-step-mode = <CADDYMOTOR_STEP_MODE_HALF>;
+			default-brake = <CADDYMOTOR_BRAKE_ON>;
 		};
+		/* left/right, yaw */
 		motor@1 {
 			gpio-clk = <&gpio TEGRA_GPIO(K,0) GPIO_ACTIVE_HIGH>;
 			gpio-en = <&gpio TEGRA_GPIO(J,0) GPIO_ACTIVE_HIGH>;

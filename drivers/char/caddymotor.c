@@ -373,6 +373,7 @@ static int proc_read_caddymotor(struct file *filp, char *buf,
 
 static int caddymotor_add_gpio(struct platform_device *pdev, struct device_node *of_node, char *node_name, char *gpio_description, int *caddymotor_gpio) {
 	int ret;
+	
   *caddymotor_gpio = of_get_named_gpio(of_node, node_name, 0);
   if(gpio_is_valid(*caddymotor_gpio)) {
   	dev_info(&pdev->dev, "%s %d\n",node_name,*caddymotor_gpio);
@@ -455,6 +456,7 @@ static void caddymotor_init_L6228(int motor) {
 static int caddymotor_probe(struct platform_device *pdev)
 {
 	int ret;
+	uint32_t val;
 	const struct of_device_id *match;
 	struct device_node *node, *pp;
 	int motor;
@@ -507,6 +509,18 @@ static int caddymotor_probe(struct platform_device *pdev)
 			continue;
 		if(caddymotor_add_gpio(pdev, pp, "gpio-control", "CADDYMOTOR_CONTROL", &(motors[motor].gpio_control)))
 			continue;
+		if(!of_property_read_u32(pp, "default-step-mode",&val)) {
+			if(val>=0 && val<STEP_MODE_MAX) {
+				motors[motor].step_mode = val;
+		  	dev_info(&pdev->dev, "step-mode %d\n",motors[motor].step_mode);
+		  } else {
+		  	dev_warn(&pdev->dev, "invalid step-mode %u\n",val);
+		  }
+		}
+		if(!of_property_read_u32(pp, "default-brake",&val)) {
+			motors[motor].brake = val?1:0;
+	  	dev_info(&pdev->dev, "default-brake %d\n",motors[motor].brake);
+		}
 		if (!device_create(caddymotor_class, NULL, MKDEV(MAJOR(dev),motor), NULL, "cm%d",motor))
 			continue;
 		caddymotor_init_L6228(motor);
