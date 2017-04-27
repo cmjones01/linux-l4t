@@ -37,14 +37,15 @@
 enum {
 	COMMAND_SPEED,
 	COMMAND_BRAKE,
-	COMMAND_WAVE
+	COMMAND_STEP_MODE
 };
 
 enum {
-	STEP_NORMAL,
-	STEP_HALF,
-	STEP_WAVE
-}
+	STEP_NORMAL = 0,
+	STEP_HALF = 1,
+	STEP_WAVE = 2,
+	STEP_MODE_MAX
+};
 
 /* character device start number */
 static dev_t dev;
@@ -74,7 +75,7 @@ struct caddymotorstate_t {
 	int gpio_half_full;
 	int gpio_control;
 	/* state */
-	volatile bool wave_mode;
+	volatile int step_mode;
 	volatile bool brake;
 	volatile int speed;
 	volatile int distance;
@@ -274,8 +275,8 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		/* skip */
 		p++;
 	/* if the first non-space character is 'w', assume this is a wave mode command */
-	} else if ('w'==*p) {
-		command = COMMAND_WAVE;
+	} else if ('m'==*p) {
+		command = COMMAND_STEP_MODE;
 		p++;
 	} else {
 		speed = simple_strtol(p,&q,0);
@@ -300,9 +301,11 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 			motors[motor].speed = speed;
 			motors[motor].distance = parm;
 			break;
-		case COMMAND_WAVE:
-			motors[motor].wave_mode = (parm!=0);
-			pr_info("motor %d wave %d\n",motor,motors[motor].wave_mode);
+		case COMMAND_STEP_MODE:
+			if(parm<0 || parm>=STEP_MODE_MAX)
+				return -EINVAL;
+			motors[motor].step_mode = parm;
+			pr_info("motor %d step_mode %d\n",motor,motors[motor].step_mode);
 			caddymotor_init_L6228(motor);
 			break;
 		case COMMAND_BRAKE:
@@ -396,38 +399,52 @@ static void caddymotor_del_gpio(struct platform_device *pdev, int gpio) {
 static void caddymotor_init_L6228(int motor) {
 	struct caddymotorstate_t *m = &motors[motor];
 	
-	if(m->wave_mode) {
-		/* put the L6228 into normal drive mode  */
-		/* take HALF/FULL high */
-		gpio_set_value(m->gpio_en,1);
-		gpio_set_value(m->gpio_half_full,0);
-		gpio_set_value(m->gpio_reset,1);
-		udelay(5);
-		/* apply reset */
-		gpio_set_value(m->gpio_reset,0);
-		udelay(5);
-		gpio_set_value(m->gpio_reset,1);
-		udelay(5);
-	} else {
-		/* put the L6228 into wave drive mode to minimise power dissipation */
-		/* take HALF/FULL high */
-		gpio_set_value(m->gpio_en,1);
-		gpio_set_value(m->gpio_half_full,1);
-		gpio_set_value(m->gpio_reset,1);
-		udelay(5);
-		/* apply reset */
-		gpio_set_value(m->gpio_reset,0);
-		udelay(5);
-		gpio_set_value(m->gpio_reset,1);
-		udelay(5);
-		/* apply one clock pulse */
-		gpio_set_value(m->gpio_clk,1);
-		udelay(5);
-		gpio_set_value(m->gpio_clk,0);
-		udelay(5);
-		/* take HALF/FULL low to ensure that L6228 is in state 2 */
-		gpio_set_value(m->gpio_half_full,0);
-		gpio_set_value(m->gpio_en,(m->brake)?1:0);
+	switch(m->step_mode) {
+		case STEP_NORMAL:
+			/* put the L6228 into normal drive mode  */
+			gpio_set_value(m->gpio_en,1);
+			gpio_set_value(m->gpio_half_full,0);
+			gpio_set_value(m->gpio_reset,1);
+			udelay(5);
+			/* apply reset */
+			gpio_set_value(m->gpio_reset,0);
+			udelay(5);
+			gpio_set_value(m->gpio_reset,1);
+			udelay(5);
+			break;
+		case STEP_HALF:
+			/* put the L6228 into half step mode  */
+			gpio_set_value(m->gpio_en,1);
+			gpio_set_value(m->gpio_half_full,1);
+			gpio_set_value(m->gpio_reset,1);
+			udelay(5);
+			/* apply reset */
+			gpio_set_value(m->gpio_reset,0);
+			udelay(5);
+			gpio_set_value(m->gpio_reset,1);
+			udelay(5);
+			break;
+		case STEP_WAVE:
+			/* put the L6228 into wave drive mode to minimise power dissipation */
+			/* take HALF/FULL high */
+			gpio_set_value(m->gpio_en,1);
+			gpio_set_value(m->gpio_half_full,1);
+			gpio_set_value(m->gpio_reset,1);
+			udelay(5);
+			/* apply reset */
+			gpio_set_value(m->gpio_reset,0);
+			udelay(5);
+			gpio_set_value(m->gpio_reset,1);
+			udelay(5);
+			/* apply one clock pulse */
+			gpio_set_value(m->gpio_clk,1);
+			udelay(5);
+			gpio_set_value(m->gpio_clk,0);
+			udelay(5);
+			/* take HALF/FULL low to ensure that L6228 is in state 2 */
+			gpio_set_value(m->gpio_half_full,0);
+			gpio_set_value(m->gpio_en,(m->brake)?1:0);
+			break;
 	}
 }
 
@@ -473,7 +490,7 @@ static int caddymotor_probe(struct platform_device *pdev)
 		motors[motor].speed = 0;
 		motors[motor].distance = 0;
 		motors[motor].brake = false;
-		motors[motor].wave_mode = false;
+		motors[motor].step_mode = STEP_NORMAL;
 		if(motor>=caddymotor.num_motors)
 			break;
 	  /* set up GPIOs */
