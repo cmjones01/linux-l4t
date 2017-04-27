@@ -149,7 +149,6 @@ static void caddymotor_timer_callback(unsigned long arg) {
 		if(m->speed != 0) {
 			gpio_set_value(m->gpio_en,1);
 			gpio_set_value(m->gpio_reset,1);
-			gpio_set_value(m->gpio_control,1);
 			gpio_set_value(m->gpio_dir,(m->speed<0)?0:1);
 			if(m->distance > 0) {
 				gpio_set_value(m->gpio_clk,1);
@@ -399,6 +398,8 @@ static void caddymotor_del_gpio(struct platform_device *pdev, int gpio) {
 static void caddymotor_init_L6228(int motor) {
 	struct caddymotorstate_t *m = &motors[motor];
 	
+	gpio_set_value(m->gpio_control,1);
+
 	switch(m->step_mode) {
 		case STEP_NORMAL:
 			/* put the L6228 into normal drive mode  */
