@@ -34,6 +34,18 @@
 #define CADDYMOTOR_POLL_INTERVAL (HZ/100)
 #define NUM_MOTORS 2
 
+enum {
+	COMMAND_SPEED,
+	COMMAND_BRAKE,
+	COMMAND_WAVE
+};
+
+enum {
+	STEP_NORMAL,
+	STEP_HALF,
+	STEP_WAVE
+}
+
 /* character device start number */
 static dev_t dev;
 
@@ -62,7 +74,8 @@ struct caddymotorstate_t {
 	int gpio_half_full;
 	int gpio_control;
 	/* state */
-	volatile int brake;
+	volatile bool wave_mode;
+	volatile bool brake;
 	volatile int speed;
 	volatile int distance;
 };
@@ -234,9 +247,9 @@ failure:
 static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		  size_t size, loff_t *offp)
 {
-	int speed;
-	int distance;
-	int brake_command = 0;
+	int speed = 0;
+	int parm;
+	int command = COMMAND_SPEED;
 	char parse_buf[20];
 	char *p;
 	char *q;
@@ -257,8 +270,12 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 		p++;
 	/* if the first non-space character is 'b', assume this is a brake command */
 	if('b'==*p) {
-		brake_command = 1;
+		command = COMMAND_BRAKE;
 		/* skip */
+		p++;
+	/* if the first non-space character is 'w', assume this is a wave mode command */
+	} else if ('w'==*p) {
+		command = COMMAND_WAVE;
 		p++;
 	} else {
 		speed = simple_strtol(p,&q,0);
@@ -271,18 +288,27 @@ static ssize_t	caddymotor_write(struct file *filp, const char *buf,
 	/* did we find another token? */
 	if(!(*p))
 		return -EINVAL;
-	distance = simple_strtol(p,&q,0);
+	parm = simple_strtol(p,&q,0);
 	if(!q || q==p)
 		return -EINVAL;
-	if(distance<0)
-		return -EINVAL;
-	if(brake_command) {
-		pr_info("motor %d brake %d\n",motor,distance);
-		motors[motor].brake = distance;
-	} else {
-		pr_info("motor %d speed %d distance %d\n",motor,speed,distance);
-		motors[motor].speed = speed;
-		motors[motor].distance = distance;
+
+	switch(command) {
+		case COMMAND_SPEED:
+			if(parm<0)
+				return -EINVAL;
+			pr_info("motor %d speed %d distance %d\n",motor,speed,parm);
+			motors[motor].speed = speed;
+			motors[motor].distance = parm;
+			break;
+		case COMMAND_WAVE:
+			motors[motor].wave_mode = (parm!=0);
+			pr_info("motor %d wave %d\n",motor,motors[motor].wave_mode);
+			caddymotor_init_L6228(motor);
+			break;
+		case COMMAND_BRAKE:
+			motors[motor].brake = (parm!=0);
+			pr_info("motor %d brake %d\n",motor,motors[motor].brake);
+			break;
 	}
 	if(!timer_pending(&caddytimer))
 		mod_timer(&caddytimer,jiffies+CADDYMOTOR_POLL_INTERVAL);
@@ -370,25 +396,39 @@ static void caddymotor_del_gpio(struct platform_device *pdev, int gpio) {
 static void caddymotor_init_L6228(int motor) {
 	struct caddymotorstate_t *m = &motors[motor];
 	
-	/* put the L6228 into wave drive mode to minimise power dissipation */
-	/* take HALF/FULL high */
-	gpio_set_value(m->gpio_en,1);
-	gpio_set_value(m->gpio_half_full,1);
-	gpio_set_value(m->gpio_reset,1);
-	udelay(5);
-	/* apply reset */
-	gpio_set_value(m->gpio_reset,0);
-	udelay(5);
-	gpio_set_value(m->gpio_reset,1);
-	udelay(5);
-	/* apply one clock pulse */
-	gpio_set_value(m->gpio_clk,1);
-	udelay(5);
-	gpio_set_value(m->gpio_clk,0);
-	udelay(5);
-	/* take HALF/FULL low to ensure that L6228 is in state 2 */
-	gpio_set_value(m->gpio_half_full,0);
-	gpio_set_value(m->gpio_en,(m->brake)?1:0);
+	if(m->wave_mode) {
+		/* put the L6228 into normal drive mode  */
+		/* take HALF/FULL high */
+		gpio_set_value(m->gpio_en,1);
+		gpio_set_value(m->gpio_half_full,0);
+		gpio_set_value(m->gpio_reset,1);
+		udelay(5);
+		/* apply reset */
+		gpio_set_value(m->gpio_reset,0);
+		udelay(5);
+		gpio_set_value(m->gpio_reset,1);
+		udelay(5);
+	} else {
+		/* put the L6228 into wave drive mode to minimise power dissipation */
+		/* take HALF/FULL high */
+		gpio_set_value(m->gpio_en,1);
+		gpio_set_value(m->gpio_half_full,1);
+		gpio_set_value(m->gpio_reset,1);
+		udelay(5);
+		/* apply reset */
+		gpio_set_value(m->gpio_reset,0);
+		udelay(5);
+		gpio_set_value(m->gpio_reset,1);
+		udelay(5);
+		/* apply one clock pulse */
+		gpio_set_value(m->gpio_clk,1);
+		udelay(5);
+		gpio_set_value(m->gpio_clk,0);
+		udelay(5);
+		/* take HALF/FULL low to ensure that L6228 is in state 2 */
+		gpio_set_value(m->gpio_half_full,0);
+		gpio_set_value(m->gpio_en,(m->brake)?1:0);
+	}
 }
 
 /* driver initialisation */
@@ -432,7 +472,8 @@ static int caddymotor_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "Motor %d:\n",motor);
 		motors[motor].speed = 0;
 		motors[motor].distance = 0;
-		motors[motor].brake = 0;
+		motors[motor].brake = false;
+		motors[motor].wave_mode = false;
 		if(motor>=caddymotor.num_motors)
 			break;
 	  /* set up GPIOs */
