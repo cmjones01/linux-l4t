@@ -98,6 +98,10 @@
 
 #define PMC_UTMIP_UHSIC_SLEEP_CFG_0		0x1fc
 
+/* CMJ mutex debug */
+#define MUTEX_SYNC_LOCK printk(KERN_WARNING "tegra-xhci: %s locking sync_lock\n",__func__);mutex_lock(&tegra->sync_lock)
+#define MUTEX_SYNC_UNLOCK printk(KERN_WARNING "tegra-xhci: %s unlocking sync_lock\n",__func__);mutex_unlock(&tegra->sync_lock)
+
 /* private data types */
 /* command requests from the firmware */
 enum MBOX_CMD_TYPE {
@@ -2835,9 +2839,9 @@ static void ss_partition_elpg_exit_work(struct work_struct *work)
 	struct tegra_xhci_hcd *tegra = container_of(work, struct tegra_xhci_hcd,
 		ss_elpg_exit_work);
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 	tegra_xhci_ss_partition_elpg_exit(tegra);
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 }
 
 /* read pmc WAKE2_STATUS register to know if SS port caused remote wake */
@@ -3157,9 +3161,9 @@ static void host_partition_elpg_exit_work(struct work_struct *work)
 	struct tegra_xhci_hcd *tegra = container_of(work, struct tegra_xhci_hcd,
 		host_elpg_exit_work);
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 	tegra_xhci_host_partition_elpg_exit(tegra);
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 }
 
 /* Mailbox handling function. This function handles requests
@@ -3235,9 +3239,9 @@ tegra_xhci_process_mbox_message(struct work_struct *work)
 
 	case MBOX_CMD_SET_BW:
 		/* fw sends BW request in MByte/sec */
-		mutex_lock(&tegra->sync_lock);
+		MUTEX_SYNC_LOCK;
 		tegra_xusb_set_bw(tegra, tegra->cmd_data << 10);
-		mutex_unlock(&tegra->sync_lock);
+		MUTEX_SYNC_UNLOCK;
 		break;
 
 	case MBOX_CMD_SAVE_DFE_CTLE_CTX:
@@ -3250,9 +3254,9 @@ tegra_xhci_process_mbox_message(struct work_struct *work)
 		ports = tegra->cmd_data;
 		for_each_set_bit(port, &ports, BITS_PER_LONG) {
 			pad = port_to_hsic_pad(port - 1);
-			mutex_lock(&tegra->sync_lock);
+			MUTEX_SYNC_LOCK;
 			ret = hsic_pad_pupd_set(tegra, pad, PUPD_IDLE);
-			mutex_unlock(&tegra->sync_lock);
+			MUTEX_SYNC_UNLOCK;
 			if (ret)
 				break;
 		}
@@ -3269,9 +3273,9 @@ tegra_xhci_process_mbox_message(struct work_struct *work)
 		ports = tegra->cmd_data;
 		for_each_set_bit(port, &ports, BITS_PER_LONG) {
 			pad = port_to_hsic_pad(port - 1);
-			mutex_lock(&tegra->sync_lock);
+			MUTEX_SYNC_LOCK;
 			ret = hsic_pad_pupd_set(tegra, pad, PUPD_DISABLE);
-			mutex_unlock(&tegra->sync_lock);
+			MUTEX_SYNC_UNLOCK;
 			if (ret)
 				break;
 		}
@@ -3497,7 +3501,7 @@ static int tegra_xhci_bus_suspend(struct usb_hcd *hcd)
 	int err = 0;
 	unsigned long flags;
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 
 	if (xhci->shared_hcd == hcd) {
 		tegra->usb3_rh_suspend = true;
@@ -3560,7 +3564,7 @@ done:
 		utmi_phy_pad_disable();
 		utmi_phy_iddq_override(true);
 	}
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 	return 0;
 
 tegra_xhci_host_elpg_entry_failed:
@@ -3573,7 +3577,7 @@ xhci_bus_suspend_failed:
 	else if (xhci->main_hcd == hcd)
 		tegra->usb2_rh_suspend = false;
 
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 	return err;
 }
 
@@ -3584,7 +3588,7 @@ static int tegra_xhci_bus_resume(struct usb_hcd *hcd)
 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 	int err = 0;
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 
 	tegra->host_resume_req = true;
 
@@ -3619,12 +3623,12 @@ static int tegra_xhci_bus_resume(struct usb_hcd *hcd)
 	else if (xhci->main_hcd == hcd)
 		tegra->usb2_rh_suspend = false;
 
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 	return 0;
 
 xhci_bus_resume_failed:
 	/* TODO: reverse elpg? */
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 	return err;
 }
 #endif
@@ -3721,20 +3725,20 @@ tegra_xhci_suspend(struct platform_device *pdev,
 
 	int ret = 0;
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 	if (!tegra->init_done) {
 		xhci_warn(xhci, "%s: xhci probe not done\n",
 				__func__);
-		mutex_unlock(&tegra->sync_lock);
+		MUTEX_SYNC_UNLOCK;
 		return -EBUSY;
 	}
 	if (!tegra->hc_in_elpg) {
 		xhci_warn(xhci, "%s: lp0 suspend entry while elpg not done\n",
 				__func__);
-		mutex_unlock(&tegra->sync_lock);
+		MUTEX_SYNC_UNLOCK;
 		return -EBUSY;
 	}
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 
 	/* enable_irq_wake for ss ports */
 	ret = enable_irq_wake(tegra->padctl_irq);
@@ -3775,14 +3779,14 @@ tegra_xhci_resume(struct platform_device *pdev)
 
 	dev_dbg(&pdev->dev, "%s\n", __func__);
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 	if (!tegra->init_done) {
 		xhci_warn(xhci, "%s: xhci probe not done\n",
 				__func__);
-		mutex_unlock(&tegra->sync_lock);
+		MUTEX_SYNC_UNLOCK;
 		return -EBUSY;
 	}
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 
 	tegra->last_jiffies = jiffies;
 
@@ -3825,7 +3829,7 @@ static void init_filesystem_firmware_done(const struct firmware *fw,
 	dma_addr_t fw_dma;
 	int ret;
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 
 	if (fw == NULL) {
 		dev_err(&pdev->dev,
@@ -3867,12 +3871,12 @@ static void init_filesystem_firmware_done(const struct firmware *fw,
 	}
 
 	release_firmware(fw);
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 	return;
 
 err_firmware_done:
 	release_firmware(fw);
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 	device_release_driver(&pdev->dev);
 }
 
@@ -4736,7 +4740,7 @@ static int tegra_xhci_remove(struct platform_device *pdev)
 	if (tegra == NULL)
 		return -EINVAL;
 
-	mutex_lock(&tegra->sync_lock);
+	MUTEX_SYNC_LOCK;
 
 	for_each_enabled_hsic_pad(pad, tegra) {
 		hsic_pad_disable(tegra, pad);
@@ -4779,7 +4783,7 @@ static int tegra_xhci_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 
 	hsic_power_remove_file(tegra);
-	mutex_unlock(&tegra->sync_lock);
+	MUTEX_SYNC_UNLOCK;
 
 	return 0;
 }
