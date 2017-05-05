@@ -148,13 +148,17 @@
 		nvidia,ss_portmap = <XUSB_PADCTL_SS_PORTMAP(P1, DISABLE)>;
 		nvidia,lane_owner = <0>;
 		nvidia,ulpicap = <0>;
-		usb_vbus1-supply = <&usb3_vcc>;
+		usb_vbus1-supply = <&ext_5v0>;
 	};
 
 	/* Expansion header USB */
 	usb@7d008000 {
 		status = "okay";
-		usb_vbus-supply = <&usb_ext_vbus>;
+		usb_vbus-supply = <&ext_5v0>;
+	};
+	
+	usb@7d004000 {
+		usb_vbus_supply = <&ext_5v0>;
 	};
 
 	pcie-controller {
